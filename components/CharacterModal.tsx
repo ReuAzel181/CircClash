@@ -1,7 +1,7 @@
 'use client'
 
 import { Character } from '../data/characters'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 
 interface CharacterModalProps {
   character: Character
@@ -12,13 +12,7 @@ interface CharacterModalProps {
 export default function CharacterModal({ character, isOpen, onClose }: CharacterModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
-    if (isOpen && canvasRef.current) {
-      drawWeaponPreview()
-    }
-  }, [isOpen, character])
-
-  const drawWeaponPreview = () => {
+  const drawWeaponPreview = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -67,7 +61,13 @@ export default function CharacterModal({ character, isOpen, onClose }: Character
 
     // Draw weapon trajectory based on weapon type
     drawWeaponTrajectory(ctx, centerX, centerY, character.weaponId)
-  }
+  }, [character])
+
+  useEffect(() => {
+    if (isOpen && canvasRef.current) {
+      drawWeaponPreview()
+    }
+  }, [isOpen, character, drawWeaponPreview])
 
   const getCharacterColor = (rarity: Character['rarity']) => {
     switch (rarity) {
@@ -244,7 +244,7 @@ export default function CharacterModal({ character, isOpen, onClose }: Character
                     </span>
                   </div>
                   <p className="text-sm text-slate-400">
-                    Specialized weapon suited for this character's combat style.
+                    Specialized weapon suited for this character&apos;s combat style.
                   </p>
                 </div>
               </div>

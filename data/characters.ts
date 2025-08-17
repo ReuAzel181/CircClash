@@ -29,7 +29,7 @@ export const characters: Character[] = [
   {
     id: 'plasma-vortex',
     name: 'Plasma Vortex',
-    description: 'A swirling mass of energy that can bend the battlefield to its will.',
+    description: 'A swirling mass of energy that creates gravitational fields to trap and damage enemies.',
     stats: {
       speed: 85,
       damage: 88,
@@ -45,8 +45,8 @@ export const characters: Character[] = [
         cooldown: 8
       },
       secondary: {
-        name: 'Plasma Burst',
-        description: 'Area damage explosion that affects nearby enemies',
+        name: 'Plasma Vortex',
+        description: 'Fires an energy bullet that becomes a pulling vortex, continuously damaging trapped enemies',
         cooldown: 12
       }
     },

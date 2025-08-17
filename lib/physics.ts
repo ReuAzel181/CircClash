@@ -140,6 +140,18 @@ export function createPhysicsWorld(width: number, height: number): PhysicsWorld 
   }
 }
 
+// Update physics world bounds for arena resizing
+export function updateWorldBounds(world: PhysicsWorld, width: number, height: number): void {
+  world.bounds.width = width
+  world.bounds.height = height
+  
+  // Ensure all entities stay within new bounds
+  for (const entity of world.entities.values()) {
+    entity.position.x = Math.max(entity.radius, Math.min(width - entity.radius, entity.position.x))
+    entity.position.y = Math.max(entity.radius, Math.min(height - entity.radius, entity.position.y))
+  }
+}
+
 export function createCircleEntity(
   id: string,
   x: number,
@@ -200,17 +212,23 @@ export function createProjectile(
   }
 }
 
-// Collision detection
+// Collision detection - aggressive detection for consistent bouncing
 export function detectCollision(a: CircleEntity, b: CircleEntity): Collision | null {
   const distance = Vector.distance(a.position, b.position)
   const minDistance = a.radius + b.radius
   
-  if (distance >= minDistance) {
+  // Very sensitive collision detection - catch all potential collisions
+  const tolerance = 3.0 // High tolerance to ensure no collisions are missed
+  if (distance >= minDistance + tolerance) {
     return null // No collision
   }
   
-  const normal = Vector.normalize(Vector.subtract(b.position, a.position))
-  const penetration = minDistance - distance
+  // Prevent division by zero for overlapping entities
+  const normal = distance > 0.001 
+    ? Vector.normalize(Vector.subtract(b.position, a.position))
+    : Vector.create(1, 0) // Default normal if entities are exactly on top of each other
+    
+  const penetration = Math.max(0.5, minDistance - distance) // Higher minimum penetration
   const relativeVelocity = Vector.magnitude(Vector.subtract(a.velocity, b.velocity))
   
   return {
@@ -232,18 +250,24 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
     return
   }
   
-  // Positional correction to prevent overlap
-  const correctionPercent = 0.8
-  const correction = Vector.multiply(normal, penetration * correctionPercent)
+  // Aggressive positional correction to prevent overlap and sliding
+  const correctionPercent = 1.0 // Complete correction
+  const correctionMagnitude = penetration * correctionPercent
+  const correction = Vector.multiply(normal, correctionMagnitude)
   
   if (!entityA.isStatic && !entityB.isStatic) {
     const totalMass = entityA.mass + entityB.mass
-    entityA.position = Vector.subtract(entityA.position, Vector.multiply(correction, entityB.mass / totalMass))
-    entityB.position = Vector.add(entityB.position, Vector.multiply(correction, entityA.mass / totalMass))
+    const massRatioA = entityB.mass / totalMass
+    const massRatioB = entityA.mass / totalMass
+    
+    // Apply strong separation with extra push
+    const extraSeparation = 1.2 // 20% extra separation
+    entityA.position = Vector.subtract(entityA.position, Vector.multiply(correction, massRatioA * extraSeparation))
+    entityB.position = Vector.add(entityB.position, Vector.multiply(correction, massRatioB * extraSeparation))
   } else if (!entityA.isStatic) {
-    entityA.position = Vector.subtract(entityA.position, correction)
+    entityA.position = Vector.subtract(entityA.position, Vector.multiply(correction, 1.2))
   } else if (!entityB.isStatic) {
-    entityB.position = Vector.add(entityB.position, correction)
+    entityB.position = Vector.add(entityB.position, Vector.multiply(correction, 1.2))
   }
   
   // Calculate momentum-based damage (reduced for longer battles)
@@ -254,38 +278,91 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
   const currentTime = Date.now()
   
   if (entityA.type !== 'projectile' && entityB.type !== 'pickup' && 
-      entityA.invulnerableUntil! < currentTime) {
-    entityA.health = Math.max(0, entityA.health - momentumDamage)
+      entityA.invulnerableUntil! < currentTime &&
+      !((entityA as any).comboInvulnerableUntil > currentTime)) { // Check combo invulnerability
+    let damageToA = momentumDamage
+    // Apply damage reduction if entity has it (for tanks)
+    if ((entityA as any).damageReduction) {
+      damageToA *= (1 - (entityA as any).damageReduction)
+    }
+    entityA.health = Math.max(0, entityA.health - damageToA)
     entityA.invulnerableUntil = currentTime + 500 // 500ms immunity
   }
   
   if (entityB.type !== 'projectile' && entityA.type !== 'pickup' && 
-      entityB.invulnerableUntil! < currentTime) {
-    entityB.health = Math.max(0, entityB.health - momentumDamage)
+      entityB.invulnerableUntil! < currentTime &&
+      !((entityB as any).comboInvulnerableUntil > currentTime)) { // Check combo invulnerability
+    let damageToB = momentumDamage
+    // Apply damage reduction if entity has it (for tanks)
+    if ((entityB as any).damageReduction) {
+      damageToB *= (1 - (entityB as any).damageReduction)
+    }
+    entityB.health = Math.max(0, entityB.health - damageToB)
     entityB.invulnerableUntil = currentTime + 500
   }
   
-  // Elastic collision response - but don't affect projectile velocities
+  // ALWAYS bounce - real world physics where objects always deflect when they hit
   if (!entityA.isStatic && !entityB.isStatic && 
       entityA.type !== 'projectile' && entityB.type !== 'projectile') {
-    const relativeVel = Vector.subtract(entityA.velocity, entityB.velocity)
+    
+    // Get velocities and masses
+    const v1 = entityA.velocity
+    const v2 = entityB.velocity
+    const m1 = entityA.mass
+    const m2 = entityB.mass
+    
+    // Calculate relative velocity to understand collision dynamics
+    const relativeVel = Vector.subtract(v1, v2)
     const velAlongNormal = Vector.dot(relativeVel, normal)
     
-    if (velAlongNormal > 0) return // Objects separating
+    // ALWAYS BOUNCE - remove restrictive conditions for consistent physics
+    // In real physics, objects always interact when they collide
     
-    const restitution = Math.max(entityA.restitution, entityB.restitution) * 1.05 // Slightly gain energy to maintain movement
-    const impulseScalar = -(1 + restitution) * velAlongNormal / (1/entityA.mass + 1/entityB.mass)
+    // Simple but effective elastic collision with energy boost
+    const restitution = 1.3 // High restitution for energetic bouncing
     
-    const impulse = Vector.multiply(normal, impulseScalar)
+    // Calculate impulse based on conservation of momentum
+    const impulse = 2 * velAlongNormal / (m1 + m2)
+    
+    // Apply collision response - swap velocity components along collision normal
+    const impulseA = impulse * m2
+    const impulseB = impulse * m1
+    
+    // Update velocities with bouncing effect
+    entityA.velocity = Vector.subtract(v1, Vector.multiply(normal, impulseA * restitution))
+    entityB.velocity = Vector.add(v2, Vector.multiply(normal, impulseB * restitution))
+    
+    // Ensure strong bouncing with minimum speeds - real objects maintain energy
+    const minSpeed = 200
+    const speedA = Vector.magnitude(entityA.velocity)
+    const speedB = Vector.magnitude(entityB.velocity)
+    
+    if (speedA < minSpeed) {
+      const direction = speedA > 0 ? Vector.normalize(entityA.velocity) : 
+        Vector.create((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)
+      entityA.velocity = Vector.multiply(Vector.normalize(direction), minSpeed)
+    }
+    if (speedB < minSpeed) {
+      const direction = speedB > 0 ? Vector.normalize(entityB.velocity) : 
+        Vector.create((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)
+      entityB.velocity = Vector.multiply(Vector.normalize(direction), minSpeed)
+    }
+    
+    // Add separation force to prevent sticking
+    const separationForce = 50
+    entityA.velocity = Vector.subtract(entityA.velocity, Vector.multiply(normal, separationForce / m1))
+    entityB.velocity = Vector.add(entityB.velocity, Vector.multiply(normal, separationForce / m2))
     
     // Small random variation for natural movement
-    const randomBoost = Vector.create(
-      (Math.random() - 0.5) * 10,
-      (Math.random() - 0.5) * 10
-    )
-    
-    entityA.velocity = Vector.add(entityA.velocity, Vector.add(Vector.multiply(impulse, 1/entityA.mass), randomBoost))
-    entityB.velocity = Vector.subtract(entityB.velocity, Vector.add(Vector.multiply(impulse, 1/entityB.mass), randomBoost))
+    const randomStrength = 30
+    entityA.velocity = Vector.add(entityA.velocity, Vector.create(
+      (Math.random() - 0.5) * randomStrength,
+      (Math.random() - 0.5) * randomStrength
+    ))
+    entityB.velocity = Vector.add(entityB.velocity, Vector.create(
+      (Math.random() - 0.5) * randomStrength,
+      (Math.random() - 0.5) * randomStrength
+    ))
   }
   
   // Handle projectile hits
@@ -293,15 +370,150 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
     const projectile = entityA.type === 'projectile' ? entityA as Projectile : entityB as Projectile
     const target = entityA.type === 'projectile' ? entityB : entityA
     
+    // Special handling for formed vortexes - allow players to pass through
+    const projectileSpecial = projectile as any
+    if (projectileSpecial.isVortex && projectileSpecial.hasFormedVortex && target.type === 'player') {
+      // Don't apply collision physics to vortex-player collisions
+      // The vortex pull force is handled separately in the vortex behavior section
+      return
+    }
+    
     // Prevent friendly fire - projectiles don't hurt their owner
     if (projectile.ownerId === target.id) {
       return // Skip damage if projectile hits its owner
     }
     
+    // VORTEX FORMATION - Handle this FIRST before any other logic
+    if (projectileSpecial.isVortex && !projectileSpecial.hasFormedVortex) {
+      // Form vortex at collision point instead of removing projectile
+      projectileSpecial.hasFormedVortex = true
+      projectileSpecial.vortexFormTime = Date.now()
+      projectile.velocity = Vector.create(0, 0) // Stop the bullet
+      projectile.radius = projectileSpecial.vortexRadius || 60 // Expand to vortex size
+      projectile.hitsRemaining = Infinity // Don't remove the vortex on further collisions
+      projectile.isStatic = true // Make vortex completely immovable
+      projectile.mass = Infinity // Prevent any movement from collisions
+      
+      // Set vortex duration
+      projectileSpecial.vortexStartTime = Date.now()
+      projectileSpecial.vortexDuration = 3000
+      
+      // Initialize damage tracking for vortex
+      if (!projectileSpecial.lastDamageTime) {
+        projectileSpecial.lastDamageTime = new Map()
+      }
+      
+      return // Don't remove the projectile, let it become a vortex
+    }
+    
+    // If vortex has already formed, don't delete it on further collisions
+    if (projectileSpecial.isVortex && projectileSpecial.hasFormedVortex) {
+      return // Keep the vortex alive
+    }
+    
+    // Special case: Iron hand should never damage its owner even indirectly
+    if (projectileSpecial.isIronHand && projectile.ownerId === target.id) {
+      return // Extra protection for iron hand
+    }
+    
+    // Additional safety: Iron hand should never damage anyone with combo invulnerability
+    if (projectileSpecial.isIronHand) {
+      const currentTime = Date.now()
+      if ((target as any).comboInvulnerableUntil > currentTime) {
+        return // Iron hand can't damage invulnerable targets
+      }
+    }
+    
     // Apply damage to target
     if (target.type === 'player' && target.health > 0) {
-      const projectileDamage = projectile.damage || 10 // Reduced default from 25 to 10
+      // Check for combo invulnerability (Iron Titan during grab combo)
+      const currentTime = Date.now()
+      if ((target as any).comboInvulnerableUntil > currentTime) {
+        // Target is invulnerable during combo, skip damage
+        projectile.health = 0 // Still remove the projectile
+        return
+      }
+      
+      // Check for charging invulnerability (Steel Guardian during energy wave charge)
+      if ((target as any).isCharging) {
+        // Target is invulnerable while charging, skip damage
+        projectile.health = 0 // Still remove the projectile
+        return
+      }
+      
+      let projectileDamage = projectile.damage || 10
+      // Apply damage reduction if target has it (for tanks)
+      if ((target as any).damageReduction) {
+        projectileDamage *= (1 - (target as any).damageReduction)
+      }
       target.health = Math.max(0, target.health - projectileDamage)
+      
+      // Track stacks for vortex characters when they hit enemies
+      if (projectile.ownerId && world.entities.has(projectile.ownerId)) {
+        const owner = world.entities.get(projectile.ownerId)
+        if (owner && (owner as any).characterType === 'vortex') {
+          if (!(owner as any).vortexStacks) {
+            ;(owner as any).vortexStacks = 0
+          }
+          ;(owner as any).vortexStacks++
+        }
+      }
+      
+      // Handle special projectile effects
+      const projectileSpecial = projectile as any
+      
+      // Explosive effect - area damage
+      if (projectileSpecial.explosive) {
+        const explosionRadius = 80
+        const maxExplosionTargets = 5 // Limit explosion targets to prevent chain reactions
+        let explosionTargets = 0
+        
+        for (const [id, entity] of world.entities) {
+          if (explosionTargets >= maxExplosionTargets) break
+          
+          if (entity.id !== projectile.id && entity.id !== projectile.ownerId && entity.type === 'player') {
+            const distance = Vector.distance(target.position, entity.position)
+            if (distance <= explosionRadius) {
+              const explosionDamage = Math.max(1, projectileDamage * (1 - distance / explosionRadius) * 0.7)
+              entity.health = Math.max(0, entity.health - explosionDamage)
+              
+              // Explosion knockback with safety limits
+              const knockbackDir = Vector.normalize(Vector.subtract(entity.position, target.position))
+              const knockbackForce = Math.min(500, 300 * (1 - distance / explosionRadius)) // Cap knockback
+              if (!entity.isStatic) {
+                const currentSpeed = Vector.magnitude(entity.velocity)
+                const newVelocity = Vector.add(entity.velocity, Vector.multiply(knockbackDir, knockbackForce))
+                // Prevent excessive speeds
+                if (Vector.magnitude(newVelocity) > currentSpeed * 2) {
+                  entity.velocity = Vector.multiply(Vector.normalize(newVelocity), currentSpeed * 1.5)
+                } else {
+                  entity.velocity = newVelocity
+                }
+              }
+              explosionTargets++
+            }
+          }
+        }
+      }
+      
+      // Electric chaining effect
+      if (projectileSpecial.electric) {
+        const chainRadius = 60
+        const chainDamage = projectileDamage * 0.6
+        for (const [id, entity] of world.entities) {
+          if (entity.id !== target.id && entity.id !== projectile.ownerId && entity.type === 'player') {
+            const distance = Vector.distance(target.position, entity.position)
+            if (distance <= chainRadius) {
+              entity.health = Math.max(0, entity.health - chainDamage)
+            }
+          }
+        }
+      }
+      
+      // Freezing effect - slow down target
+      if (projectileSpecial.freezing) {
+        (target as any).frozenUntil = Date.now() + 2000 // 2 seconds freeze
+      }
       
       // Check for critical hit (high velocity impact)
       const isCriticalHit = relativeVelocity > 400
@@ -313,7 +525,7 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
       }
     }
     
-    // Remove projectile or reduce piercing
+    // Remove projectile or reduce piercing (but not for vortexes)
     if (projectile.hitsRemaining <= 1) {
       world.entities.delete(projectile.id)
     } else {
@@ -370,7 +582,14 @@ export function applyFriction(world: PhysicsWorld): void {
       if (entity.type === 'player') {
         // Maintain constant speed for bouncing ball physics
         const currentSpeed = Vector.magnitude(entity.velocity)
-        const targetSpeed = 250 // Constant bouncing speed
+        let targetSpeed = 250 // Base constant bouncing speed
+        
+        // Apply slow effect if active
+        const currentTime = Date.now()
+        if ((entity as any).slowedUntil && (entity as any).slowedUntil > currentTime) {
+          const slowStrength = (entity as any).slowStrength || 0.4
+          targetSpeed = targetSpeed * (1 - slowStrength) // Reduce speed by slow percentage
+        }
         
         if (currentSpeed > 5) { // Only normalize if moving
           const direction = Vector.normalize(entity.velocity)
@@ -450,24 +669,57 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
   while (world.timeAccumulator >= world.fixedTimeStep) {
     const currentTime = Date.now()
     
+    // Collect entities to remove (avoid modifying map during iteration)
+    const entitiesToRemove: string[] = []
+    
     // Remove expired entities
     for (const [id, entity] of world.entities) {
       if (entity.lifetime && currentTime > (entity.lifetime + (entity as any).spawnTime || 0)) {
-        world.entities.delete(id)
+        entitiesToRemove.push(id)
         continue
       }
       
       // Remove dead entities
       if (entity.health <= 0) {
-        world.entities.delete(id)
+        entitiesToRemove.push(id)
         continue
       }
     }
+    
+    // Safe removal after iteration
+    entitiesToRemove.forEach(id => {
+      const entity = world.entities.get(id)
+      if (entity) {
+        // Clean up grab flags when entity is removed
+        if ((entity as any).isGrabbed) {
+          delete (entity as any).isGrabbed
+        }
+        if ((entity as any).grabCooldownUntil) {
+          delete (entity as any).grabCooldownUntil
+        }
+        
+        // Clean up any timeouts for this entity
+        if ((entity as any).activeTimeouts) {
+          (entity as any).activeTimeouts.forEach((timeout: NodeJS.Timeout) => clearTimeout(timeout))
+        }
+        world.entities.delete(id)
+      }
+    })
     
     // Update weapon systems and energy
     for (const [id, entity] of world.entities) {
       updateWeaponCooldowns(entity, currentTime)
       regenerateEnergy(entity, world.fixedTimeStep)
+      
+      // Handle self-healing for tank characters
+      if ((entity as any).selfHeal && entity.health > 0 && entity.health < entity.maxHealth) {
+        const lastHealTime = (entity as any).lastHealTime || currentTime
+        if (currentTime - lastHealTime >= 1000) { // Heal every second
+          const healAmount = (entity as any).selfHeal
+          entity.health = Math.min(entity.maxHealth, entity.health + healAmount)
+          ;(entity as any).lastHealTime = currentTime
+        }
+      }
     }
     
     // Update AI (will be called with weapons from outside)
@@ -482,19 +734,693 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
     // Integration step - handle projectiles separately
     for (const [id, entity] of world.entities) {
       if (entity.type === 'projectile') {
+        const projectileSpecial = entity as any
+        
+        // Homing behavior
+        if (projectileSpecial.homing) {
+          // Limit homing search to prevent infinite loops
+          if (!projectileSpecial.homingSearchAttempts) {
+            projectileSpecial.homingSearchAttempts = 0
+          }
+          
+          if (!projectileSpecial.homingTarget || !world.entities.has(projectileSpecial.homingTarget)) {
+            projectileSpecial.homingSearchAttempts++
+            
+            // Give up homing after too many failed attempts
+            if (projectileSpecial.homingSearchAttempts > 10) {
+              projectileSpecial.homing = false
+            } else {
+              // Find nearest enemy
+              let nearestDistance = 200 // Maximum homing range
+              let nearestTarget = null
+              
+              for (const [targetId, targetEntity] of world.entities) {
+                if (targetEntity.type === 'player' && 
+                    targetEntity.id !== (entity as Projectile).ownerId &&
+                    targetEntity.health > 0) {
+                  const distance = Vector.distance(entity.position, targetEntity.position)
+                  if (distance < nearestDistance) {
+                    nearestDistance = distance
+                    nearestTarget = targetId
+                  }
+                }
+              }
+              projectileSpecial.homingTarget = nearestTarget
+            }
+          }
+          
+          // Apply homing force toward target
+          if (projectileSpecial.homingTarget && projectileSpecial.homing) {
+            const target = world.entities.get(projectileSpecial.homingTarget)
+            if (target && target.health > 0) {
+              const dirToTarget = Vector.normalize(Vector.subtract(target.position, entity.position))
+              const currentDir = Vector.normalize(entity.velocity)
+              const homingStrength = Math.min(0.15, projectileSpecial.homingStrength || 0.1) // Cap homing strength
+              const homingForce = Vector.multiply(dirToTarget, homingStrength)
+              
+              // Blend current direction with homing direction
+              const newDirection = Vector.normalize(Vector.add(currentDir, homingForce))
+              const speed = Vector.magnitude(entity.velocity)
+              entity.velocity = Vector.multiply(newDirection, speed)
+            } else {
+              // Target died, clear it
+              projectileSpecial.homingTarget = null
+            }
+          }
+        }
+        
+        // Special projectile behaviors for new abilities
+        
+        // Shockwave behavior (Steel Guardian)
+        if (projectileSpecial.isShockwave) {
+          // Expand the shockwave radius over time
+          if (!projectileSpecial.initialRadius) {
+            projectileSpecial.initialRadius = entity.radius
+            projectileSpecial.expansionRate = 400 // pixels per second expansion rate
+            projectileSpecial.maxRadius = projectileSpecial.explosiveRadius || 80
+          }
+          
+          // Expand the radius
+          entity.radius += projectileSpecial.expansionRate * world.fixedTimeStep
+          
+          // When it reaches max size, mark for removal
+          if (entity.radius >= projectileSpecial.maxRadius) {
+            entity.health = 0 // Mark for removal
+          }
+          
+          // Static shockwave - doesn't move
+          entity.velocity.x = 0
+          entity.velocity.y = 0
+        }
+        
+        // Earthquake behavior (Iron Titan)
+        if (projectileSpecial.isEarthquake) {
+          // Expand the earthquake radius over time (faster than shockwave)
+          if (!projectileSpecial.initialRadius) {
+            projectileSpecial.initialRadius = entity.radius
+            projectileSpecial.expansionRate = 600 // Faster expansion for earthquake
+            projectileSpecial.maxRadius = projectileSpecial.explosiveRadius || 120
+          }
+          
+          // Expand the radius
+          entity.radius += projectileSpecial.expansionRate * world.fixedTimeStep
+          
+          // When it reaches max size, mark for removal
+          if (entity.radius >= projectileSpecial.maxRadius) {
+            entity.health = 0 // Mark for removal
+          }
+          
+          // Static earthquake - doesn't move
+          entity.velocity.x = 0
+          entity.velocity.y = 0
+        }
+        
+        // Fissure behavior (Iron Titan - new ground crack system)
+        if (projectileSpecial.isFissure) {
+          // Track distance traveled
+          if (!projectileSpecial.traveledDistance) {
+            projectileSpecial.traveledDistance = 0
+            projectileSpecial.maxDistance = projectileSpecial.fissureLength || 350
+          }
+          
+          // Calculate distance traveled this frame
+          const speed = Vector.magnitude(entity.velocity)
+          const distanceThisFrame = speed * world.fixedTimeStep
+          projectileSpecial.traveledDistance += distanceThisFrame
+          
+          // When fissure reaches max length, mark for removal
+          if (projectileSpecial.traveledDistance >= projectileSpecial.maxDistance) {
+            entity.health = 0 // Mark for removal
+          }
+          
+          // Create damage zone along the fissure path
+          const fissureWidth = projectileSpecial.fissureWidth || 25
+          // Check for entities within fissure width perpendicular to movement direction
+          for (const [targetId, targetEntity] of world.entities) {
+            if (targetEntity.type === 'player' && 
+                targetEntity.id !== (entity as any).ownerId &&
+                targetEntity.health > 0) {
+              
+              // Calculate perpendicular distance from fissure line
+              const dirToTarget = Vector.subtract(targetEntity.position, entity.position)
+              const fissureDir = Vector.normalize(entity.velocity)
+              const perpDistance = Math.abs(dirToTarget.x * (-fissureDir.y) + dirToTarget.y * fissureDir.x)
+              
+              if (perpDistance <= fissureWidth / 2) {
+                // Target is within fissure damage zone
+                if (!projectileSpecial.hitTargets) {
+                  projectileSpecial.hitTargets = new Set()
+                }
+                
+                if (!projectileSpecial.hitTargets.has(targetId)) {
+                  let fissureDamage = entity.damage || 35
+                  // Apply damage reduction if target has it
+                  if ((targetEntity as any).damageReduction) {
+                    fissureDamage *= (1 - (targetEntity as any).damageReduction)
+                  }
+                  targetEntity.health = Math.max(0, targetEntity.health - fissureDamage)
+                  projectileSpecial.hitTargets.add(targetId)
+                }
+              }
+            }
+          }
+        }
+        
+        // Iron Hand behavior (Iron Titan - grab and punch combo)
+        if (projectileSpecial.isIronHand) {
+          // Initialize hand properties
+          if (!projectileSpecial.startPosition) {
+            projectileSpecial.startPosition = { ...entity.position }
+            projectileSpecial.traveledDistance = 0
+            projectileSpecial.maxDistance = projectileSpecial.maxExtension || 280
+            projectileSpecial.isExtending = true
+            projectileSpecial.hasGrabbedTarget = false
+            projectileSpecial.grabbedTargetId = null
+            projectileSpecial.punchCount = 0
+            projectileSpecial.lastPunchTime = 0
+            projectileSpecial.punchInterval = 200 // Faster punches: 200ms between punches
+            projectileSpecial.grabRadius = 25 // Larger grab detection radius
+          }
+          
+          // If we have a grabbed target, handle the punch sequence
+          if (projectileSpecial.hasGrabbedTarget && projectileSpecial.grabbedTargetId) {
+            const grabbedTarget = world.entities.get(projectileSpecial.grabbedTargetId)
+            
+            if (grabbedTarget && grabbedTarget.health > 0) {
+              // Force target to exact hand position for better visual grab
+              const grabOffset = { x: 0, y: 0 } // Target stays exactly at hand position
+              grabbedTarget.position.x = entity.position.x + grabOffset.x
+              grabbedTarget.position.y = entity.position.y + grabOffset.y
+              
+              // Completely stop target movement and disable physics temporarily
+              grabbedTarget.velocity = { x: 0, y: 0 }
+              ;(grabbedTarget as any).isGrabbed = true // Mark as grabbed to prevent other physics
+              
+              // Punch sequence
+              const currentTime = Date.now()
+              if (currentTime - projectileSpecial.lastPunchTime >= projectileSpecial.punchInterval) {
+                if (projectileSpecial.punchCount < 5) {
+                  // Deal punch damage
+                  let punchDamage = 8 // 8 damage per punch (5 punches = 40 total damage)
+                  if ((grabbedTarget as any).damageReduction) {
+                    punchDamage *= (1 - (grabbedTarget as any).damageReduction)
+                  }
+                  grabbedTarget.health = Math.max(0, grabbedTarget.health - punchDamage)
+                  
+                  projectileSpecial.punchCount++
+                  projectileSpecial.lastPunchTime = currentTime
+                  
+                  // Visual punch effect (store for rendering)
+                  projectileSpecial.justPunched = true
+                  setTimeout(() => {
+                    if (projectileSpecial) projectileSpecial.justPunched = false
+                  }, 150)
+                  
+                  // Add small screen shake effect for punch impact
+                  projectileSpecial.punchShake = 3
+                  setTimeout(() => {
+                    if (projectileSpecial) projectileSpecial.punchShake = 0
+                  }, 100)
+                } else {
+                  // Finished punching, release target with knockback
+                  ;(grabbedTarget as any).isGrabbed = false // Re-enable physics FIRST
+                  
+                  const knockbackForce = projectileSpecial.knockbackForce || 200
+                  const knockbackDir = Vector.normalize(Vector.subtract(grabbedTarget.position, projectileSpecial.startPosition))
+                  const knockbackVelocity = Vector.multiply(knockbackDir, knockbackForce)
+                  
+                  // Apply immediate velocity for knockback
+                  grabbedTarget.velocity.x = knockbackVelocity.x
+                  grabbedTarget.velocity.y = knockbackVelocity.y
+                  
+                  // Clear the grab flag immediately to restore movement
+                  delete (grabbedTarget as any).isGrabbed
+                  
+                  // Add a brief cooldown period where the target can't be grabbed again
+                  ;(grabbedTarget as any).grabCooldownUntil = Date.now() + 1000 // 1 second immunity
+                  
+                  // Hand starts retracting
+                  projectileSpecial.hasGrabbedTarget = false
+                  projectileSpecial.grabbedTargetId = null
+                  projectileSpecial.isExtending = false
+                  
+                  const retractionSpeed = projectileSpecial.retractionSpeed || 400
+                  const dirToStart = Vector.normalize(Vector.subtract(projectileSpecial.startPosition, entity.position))
+                  entity.velocity = Vector.multiply(dirToStart, retractionSpeed)
+                }
+              }
+            } else {
+              // Target died during grab, start retracting and clean up
+              if (projectileSpecial.grabbedTargetId) {
+                const deadTarget = world.entities.get(projectileSpecial.grabbedTargetId)
+                if (deadTarget) {
+                  delete (deadTarget as any).isGrabbed // Clean up grab flag
+                }
+              }
+              
+              projectileSpecial.hasGrabbedTarget = false
+              projectileSpecial.grabbedTargetId = null
+              projectileSpecial.isExtending = false
+              
+              const retractionSpeed = projectileSpecial.retractionSpeed || 400
+              const dirToStart = Vector.normalize(Vector.subtract(projectileSpecial.startPosition, entity.position))
+              entity.velocity = Vector.multiply(dirToStart, retractionSpeed)
+            }
+          } else {
+            // Normal extension behavior - look for targets to grab
+            const distanceFromStart = Vector.distance(entity.position, projectileSpecial.startPosition)
+            
+            if (projectileSpecial.isExtending) {
+              // Enhanced grab detection with prediction
+              for (const [targetId, targetEntity] of world.entities) {
+                if (targetEntity.type === 'player' && 
+                    targetEntity.id !== (entity as any).ownerId &&
+                    targetEntity.health > 0 &&
+                    !(targetEntity as any).isGrabbed && // Don't grab already grabbed targets
+                    !((targetEntity as any).grabCooldownUntil > Date.now())) { // Check grab cooldown
+                  
+                  // Use larger detection radius for better grab accuracy
+                  const grabDistance = Vector.distance(entity.position, targetEntity.position)
+                  const effectiveGrabRadius = projectileSpecial.grabRadius + targetEntity.radius + entity.radius
+                  
+                  // Also check predicted position based on target velocity
+                  const targetFuturePos = {
+                    x: targetEntity.position.x + targetEntity.velocity.x * 0.1, // Predict 100ms ahead
+                    y: targetEntity.position.y + targetEntity.velocity.y * 0.1
+                  }
+                  const predictedDistance = Vector.distance(entity.position, targetFuturePos)
+                  
+                  if (grabDistance <= effectiveGrabRadius || predictedDistance <= effectiveGrabRadius) {
+                    // Successfully grabbed the target!
+                    projectileSpecial.hasGrabbedTarget = true
+                    projectileSpecial.grabbedTargetId = targetId
+                    projectileSpecial.punchCount = 0
+                    projectileSpecial.lastPunchTime = Date.now()
+                    
+                    // Make Iron Titan invulnerable during combo
+                    const ironTitan = world.entities.get((entity as any).ownerId)
+                    if (ironTitan) {
+                      ;(ironTitan as any).comboInvulnerableUntil = Date.now() + 2000 // 2 second invulnerability during combo
+                    }
+                    
+                    // Stop the hand extension immediately
+                    entity.velocity = { x: 0, y: 0 }
+                    
+                    // Snap target to hand position for clean grab
+                    targetEntity.position.x = entity.position.x
+                    targetEntity.position.y = entity.position.y
+                    targetEntity.velocity = { x: 0, y: 0 }
+                    ;(targetEntity as any).isGrabbed = true
+                    
+                    break
+                  }
+                }
+              }
+              
+              // If no target grabbed and reached max distance, start retracting
+              if (!projectileSpecial.hasGrabbedTarget && distanceFromStart >= projectileSpecial.maxDistance) {
+                projectileSpecial.isExtending = false
+                
+                const retractionSpeed = projectileSpecial.retractionSpeed || 400
+                const dirToStart = Vector.normalize(Vector.subtract(projectileSpecial.startPosition, entity.position))
+                entity.velocity = Vector.multiply(dirToStart, retractionSpeed)
+              }
+            } else {
+              // Hand is retracting
+              if (distanceFromStart <= 10) { // Close enough to start position
+                entity.health = 0 // Mark for removal
+              }
+            }
+          }
+        }
+        
+        // Shield Wall behavior (Steel Guardian - defensive wall formation)
+        if (projectileSpecial.isShieldWall) {
+          // Initialize shield wall properties
+          if (!projectileSpecial.spawnTime) {
+            projectileSpecial.spawnTime = Date.now()
+            projectileSpecial.travelDistance = 0
+            projectileSpecial.stopDistance = 150 // Distance to travel before stopping
+          }
+          
+          // Track distance traveled
+          const speed = Vector.magnitude(entity.velocity)
+          if (speed > 0) {
+            projectileSpecial.travelDistance += speed * world.fixedTimeStep
+          }
+          
+          // Stop moving and become active shield after traveling enough distance
+          if (!projectileSpecial.isActiveShield && projectileSpecial.travelDistance >= projectileSpecial.stopDistance) {
+            entity.velocity = { x: 0, y: 0 } // Stop moving
+            projectileSpecial.isActiveShield = true
+            projectileSpecial.activationTime = Date.now()
+          }
+          
+          // Check if shield wall has expired
+          if (projectileSpecial.isActiveShield) {
+            const currentTime = Date.now()
+            const timeActive = currentTime - projectileSpecial.activationTime
+            
+            if (timeActive >= projectileSpecial.shieldDuration || projectileSpecial.shieldHealth <= 0) {
+              entity.health = 0 // Mark for removal
+            }
+          }
+          
+          // Shield reflection behavior - check for incoming projectiles
+          if (projectileSpecial.isActiveShield) {
+            for (const [targetId, targetEntity] of world.entities) {
+              if (targetEntity.type === 'projectile' && 
+                  targetEntity.id !== entity.id &&
+                  (targetEntity as any).ownerId !== (entity as any).ownerId) {
+                
+                const distance = Vector.distance(entity.position, targetEntity.position)
+                const shieldRadius = entity.radius + 10 // Slightly larger detection
+                
+                if (distance <= shieldRadius) {
+                  // Shield interaction with projectile
+                  if (Math.random() < projectileSpecial.reflectChance) {
+                    // Reflect the projectile
+                    const reflectDir = Vector.normalize(Vector.subtract(targetEntity.position, entity.position))
+                    const speed = Vector.magnitude(targetEntity.velocity)
+                    targetEntity.velocity = Vector.multiply(reflectDir, speed)
+                    ;(targetEntity as any).ownerId = (entity as any).ownerId // Now belongs to shield owner
+                  } else {
+                    // Absorb the projectile and take damage
+                    projectileSpecial.shieldHealth -= (targetEntity.damage || 10)
+                    targetEntity.health = 0 // Remove the absorbed projectile
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // Energy Wave behavior (Steel Guardian - growing wave with DOT and slow)
+        if (projectileSpecial.isEnergyWave) {
+          // Initialize energy wave properties
+          if (!projectileSpecial.spawnTime) {
+            projectileSpecial.spawnTime = Date.now()
+            projectileSpecial.distanceTraveled = 0
+            projectileSpecial.affectedTargets = new Set()
+            projectileSpecial.dotApplications = new Map() // Track DOT applications per target
+          }
+          
+          // Track distance traveled and grow the wave
+          const speed = Vector.magnitude(entity.velocity)
+          if (speed > 0) {
+            const deltaDistance = speed * world.fixedTimeStep
+            projectileSpecial.distanceTraveled += deltaDistance
+            
+            // Grow the wave based on distance traveled
+            const growthFactor = 1 + (projectileSpecial.distanceTraveled / 100) * (projectileSpecial.waveGrowthRate - 1)
+            entity.radius = projectileSpecial.originalRadius * growthFactor
+          }
+          
+          // Check for enemies within the wave
+          for (const [targetId, targetEntity] of world.entities) {
+            if (targetEntity.type === 'player' && 
+                targetEntity.id !== (entity as any).ownerId &&
+                targetEntity.health > 0) {
+              
+              const distance = Vector.distance(entity.position, targetEntity.position)
+              const waveRadius = entity.radius
+              
+              if (distance <= waveRadius) {
+                const currentTime = Date.now()
+                
+                // Ensure dotApplications is initialized (safety check)
+                if (!projectileSpecial.dotApplications) {
+                  projectileSpecial.dotApplications = new Map()
+                }
+                if (!projectileSpecial.affectedTargets) {
+                  projectileSpecial.affectedTargets = new Set()
+                }
+                
+                // Apply DOT if not already affected or if enough time has passed
+                const lastDotTime = projectileSpecial.dotApplications.get(targetId) || 0
+                const dotInterval = 500 // Apply DOT every 500ms
+                
+                if (currentTime - lastDotTime >= dotInterval) {
+                  // Apply damage over time
+                  const dotDamage = projectileSpecial.damageOverTime || 15
+                  targetEntity.health = Math.max(0, targetEntity.health - dotDamage)
+                  projectileSpecial.dotApplications.set(targetId, currentTime)
+                  
+                  // Apply slow effect
+                  const slowStrength = projectileSpecial.slowEffectStrength || 0.4
+                  const slowDuration = projectileSpecial.slowDuration || 4000
+                  
+                  if (!(targetEntity as any).slowedUntil || (targetEntity as any).slowedUntil < currentTime + slowDuration) {
+                    ;(targetEntity as any).slowedUntil = currentTime + slowDuration
+                    ;(targetEntity as any).slowStrength = slowStrength
+                  }
+                  
+                  // Mark as affected to prevent multiple applications
+                  projectileSpecial.affectedTargets.add(targetId)
+                }
+              }
+            }
+          }
+        }
+        
+        // Boomerang behavior (Plasma Vortex)
+        if (projectileSpecial.isBoomerang && !projectileSpecial.returnPhase) {
+          const distanceTraveled = Vector.distance(entity.position, projectileSpecial.originalPosition || entity.position)
+          if (distanceTraveled >= (projectileSpecial.maxDistance || 300)) {
+            projectileSpecial.returnPhase = true
+            // Reverse velocity to return to shooter
+            const shooter = world.entities.get(projectileSpecial.originalShooter)
+            if (shooter) {
+              const returnDirection = Vector.normalize(Vector.subtract(shooter.position, entity.position))
+              const speed = Vector.magnitude(entity.velocity)
+              entity.velocity = Vector.multiply(returnDirection, speed * 1.2) // Slightly faster return
+            }
+          }
+        }
+        
+        // Vortex behavior (New Plasma Vortex)
+        if (projectileSpecial.isVortex) {
+          if (!projectileSpecial.hasFormedVortex) {
+            // Track distance traveled
+            projectileSpecial.distanceTraveled = projectileSpecial.distanceTraveled || 0
+            projectileSpecial.distanceTraveled += Vector.magnitude(entity.velocity) * deltaTime
+            
+            // Check if bullet should stop and form vortex
+            if (projectileSpecial.distanceTraveled >= (projectileSpecial.vortexStopDistance || 250)) {
+              projectileSpecial.hasFormedVortex = true
+              projectileSpecial.vortexFormTime = Date.now()
+              entity.velocity = Vector.create(0, 0) // Stop the bullet
+              entity.radius = projectileSpecial.vortexRadius || 60 // Expand to vortex size
+              entity.isStatic = true // Make vortex completely immovable
+              entity.mass = Infinity // Prevent any movement from collisions
+            }
+          } else {
+            // Vortex is active - apply pulling force and damage
+            const currentTime = Date.now()
+            const timeSinceForm = currentTime - projectileSpecial.vortexFormTime
+            
+            // Check if vortex should expire (always use vortexDuration, ignore touched status)
+            const maxDuration = projectileSpecial.vortexDuration || 3000
+            if (timeSinceForm >= maxDuration) {
+              entity.health = 0 // Mark for removal
+            } else {
+              // Apply suction to nearby enemies
+              for (const [targetId, targetEntity] of world.entities) {
+                if (targetEntity.type === 'player' && 
+                    targetEntity.id !== (entity as Projectile).ownerId &&
+                    targetEntity.health > 0) {
+                  const distance = Vector.distance(entity.position, targetEntity.position)
+                  const vortexRadius = projectileSpecial.vortexRadius || 60
+                  
+                  if (distance <= vortexRadius) {
+                    // Enemy is inside vortex - mark as touched and apply damage
+                    if (!projectileSpecial.vortexTouched) {
+                      projectileSpecial.vortexTouched = true
+                      projectileSpecial.vortexFormTime = currentTime // Reset timer
+                    }
+                    
+                    // Apply continuous damage
+                    const lastDamageTime = projectileSpecial.lastDamageTime.get(targetId) || 0
+                    if (currentTime - lastDamageTime >= 200) { // Damage every 200ms
+                      const damage = (projectileSpecial.vortexDamageRate || 12) * 0.2 // 0.2 second worth of damage
+                      targetEntity.health = Math.max(0, targetEntity.health - damage)
+                      projectileSpecial.lastDamageTime.set(targetId, currentTime)
+                      
+                      // Increment stack for vortex owner (only when damage is actually applied)
+                      const ownerId = (entity as Projectile).ownerId
+                      if (ownerId && world.entities.has(ownerId)) {
+                        const owner = world.entities.get(ownerId)
+                        if (owner) {
+                          if (!(owner as any).vortexStacks) {
+                            ;(owner as any).vortexStacks = 0
+                          }
+                          ;(owner as any).vortexStacks++
+                        }
+                      }
+                    }
+                    
+                    // Suction removed: previously pulled enemies toward the vortex center which
+                    // distorted movement. We keep damage and stacking behavior but no longer
+                    // apply any pulling forces.
+                  }
+                  
+                  // Range suction disabled - no pull applied outside the vortex either.
+                }
+              }
+            }
+          }
+        }
+        
+        // Mine behavior (Chaos Bomber)
+        if (projectileSpecial.proximityMine && projectileSpecial.isStationary) {
+          // Check for nearby enemies
+          for (const [targetId, targetEntity] of world.entities) {
+            if (targetEntity.type === 'player' && 
+                targetEntity.id !== (entity as Projectile).ownerId &&
+                targetEntity.health > 0) {
+              const distance = Vector.distance(entity.position, targetEntity.position)
+              if (distance <= (projectileSpecial.activationRadius || 50)) {
+                // Explode the mine
+                projectileSpecial.explosive = true
+                projectileSpecial.explosiveRadius = projectileSpecial.explosiveRadius || 40
+                entity.health = 0 // Mark for removal and explosion
+                break
+              }
+            }
+          }
+        }
+        
+        // Chain lightning behavior (Lightning Striker, Blade Master)
+        if (projectileSpecial.chainLightning && projectileSpecial.chainCount > 0) {
+          // Find nearby enemies for chaining
+          for (const [targetId, targetEntity] of world.entities) {
+            if (targetEntity.type === 'player' && 
+                targetEntity.id !== (entity as Projectile).ownerId &&
+                targetEntity.health > 0 &&
+                !projectileSpecial.alreadyChained.has(targetId)) {
+              const distance = Vector.distance(entity.position, targetEntity.position)
+              if (distance <= (projectileSpecial.chainRange || 100)) {
+                // Apply chain damage
+                targetEntity.health = Math.max(0, targetEntity.health - (entity.damage * 0.7))
+                projectileSpecial.alreadyChained.add(targetId)
+                projectileSpecial.chainCount--
+                
+                // Visual effect: spawn small chain projectiles
+                if (projectileSpecial.chainCount > 0) {
+                  const chainDirection = Vector.normalize(Vector.subtract(targetEntity.position, entity.position))
+                  // Could spawn visual chain effect here
+                }
+                break
+              }
+            }
+          }
+        }
+        
+        // Void rift behavior (Void Sniper)
+        if (projectileSpecial.voidRift && !projectileSpecial.hasRifted) {
+          const distanceTraveled = Vector.distance(entity.position, projectileSpecial.originalPosition || entity.position)
+          if (distanceTraveled >= (projectileSpecial.teleportDistance || 150)) {
+            // Teleport to a new position near an enemy
+            for (const [targetId, targetEntity] of world.entities) {
+              if (targetEntity.type === 'player' && 
+                  targetEntity.id !== (entity as Projectile).ownerId &&
+                  targetEntity.health > 0) {
+                // Teleport behind the target
+                const offsetDirection = Vector.normalize(Vector.subtract(entity.position, targetEntity.position))
+                const newPosition = Vector.add(targetEntity.position, Vector.multiply(offsetDirection, -30))
+                entity.position = newPosition
+                projectileSpecial.hasRifted = true
+                break
+              }
+            }
+          }
+        }
+        
+        // Shadow clone behavior (Shadow Assassin)
+        if (projectileSpecial.createsCopies && !projectileSpecial.copiesCreated) {
+          projectileSpecial.copiesCreated = true
+          // Create visual copies that follow slightly different paths
+          for (let i = 0; i < (projectileSpecial.copyCount || 2); i++) {
+            const angleOffset = (i + 1) * 15 * Math.PI / 180 // 15 degree offset
+            const cos = Math.cos(angleOffset)
+            const sin = Math.sin(angleOffset)
+            const copyVelocity = Vector.create(
+              entity.velocity.x * cos - entity.velocity.y * sin,
+              entity.velocity.x * sin + entity.velocity.y * cos
+            )
+            // Could spawn visual copy projectiles here with copyVelocity
+          }
+        }
+        
+        // Apply freezing effect to projectile movement
+        const currentTime = Date.now()
+        const speedMultiplier = (entity as any).frozenUntil > currentTime ? 0.3 : 1.0
+        
         // Projectiles only update position, no physics interactions
-        entity.position.x += entity.velocity.x * world.fixedTimeStep
-        entity.position.y += entity.velocity.y * world.fixedTimeStep
-        // Check boundaries for projectiles (remove when hitting walls)
-        if (entity.position.x - entity.radius <= 0 || 
-            entity.position.x + entity.radius >= world.bounds.width ||
-            entity.position.y - entity.radius <= 0 || 
-            entity.position.y + entity.radius >= world.bounds.height) {
-          entity.health = 0 // Mark for removal
+        entity.position.x += entity.velocity.x * world.fixedTimeStep * speedMultiplier
+        entity.position.y += entity.velocity.y * world.fixedTimeStep * speedMultiplier
+        
+        // Optimized boundary checks for projectiles (only check if close to boundaries)
+        const buffer = entity.radius + 10
+        if (entity.position.x < buffer || entity.position.x > world.bounds.width - buffer ||
+            entity.position.y < buffer || entity.position.y > world.bounds.height - buffer) {
+          
+          // More precise boundary check
+          if (entity.position.x - entity.radius <= 0 || 
+              entity.position.x + entity.radius >= world.bounds.width ||
+              entity.position.y - entity.radius <= 0 || 
+              entity.position.y + entity.radius >= world.bounds.height) {
+            
+            // Special handling for vortex projectiles - transform to vortex instead of deleting
+            if ((entity as any).isVortex && !(entity as any).hasFormedVortex) {
+              (entity as any).hasFormedVortex = true
+              entity.velocity = { x: 0, y: 0 }
+              ;(entity as any).type = 'vortex'
+              entity.health = 100
+              ;(entity as any).lastDamageTime = 0
+              
+              // Ensure vortex forms at a valid position within bounds
+              entity.position.x = Math.max(entity.radius + 5, Math.min(world.bounds.width - entity.radius - 5, entity.position.x))
+              entity.position.y = Math.max(entity.radius + 5, Math.min(world.bounds.height - entity.radius - 5, entity.position.y))
+              
+              // Set vortex properties to match collision resolution
+              entity.radius = (entity as any).vortexRadius || 60
+              ;(entity as any).hitsRemaining = Infinity
+              entity.isStatic = true
+              entity.mass = Infinity
+              
+              // Set vortex duration
+              ;(entity as any).vortexFormTime = Date.now()
+              ;(entity as any).vortexStartTime = Date.now()
+              ;(entity as any).vortexDuration = 3000
+              
+              // Initialize damage tracking for vortex
+              if (!(entity as any).lastDamageTime) {
+                ;(entity as any).lastDamageTime = new Map()
+              }
+            } else {
+              entity.health = 0 // Mark for removal for non-vortex projectiles
+            }
+          }
         }
       } else {
-        // Normal physics for non-projectiles
+        // Skip physics for grabbed entities (they're controlled by iron hand)
+        if ((entity as any).isGrabbed) {
+          continue
+        }
+        
+        // Apply freezing effect to player movement
+        const currentTime = Date.now()
+        const speedMultiplier = (entity as any).frozenUntil > currentTime ? 0.3 : 1.0
+        
+        // Normal physics for non-projectiles with speed adjustment
+        const originalVelocity = { ...entity.velocity }
         integrate(entity, world.fixedTimeStep)
+        
+        if (speedMultiplier < 1.0) {
+          entity.velocity = Vector.multiply(entity.velocity, speedMultiplier)
+        }
+        
         handleBoundaryCollision(entity, world.bounds)
       }
     }
@@ -509,6 +1435,29 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
         // Skip projectile-to-projectile collisions
         if (entityA.type === 'projectile' && entityB.type === 'projectile') {
           continue
+        }
+        
+        // Skip collisions involving grabbed entities
+        if ((entityA as any).isGrabbed || (entityB as any).isGrabbed) {
+          continue
+        }
+        
+        // Skip collisions involving entities with combo invulnerability
+        const currentTime = Date.now()
+        if (((entityA as any).comboInvulnerableUntil > currentTime) || 
+            ((entityB as any).comboInvulnerableUntil > currentTime)) {
+          continue // Prevent collision damage during combos
+        }
+        
+        // Extra protection: Skip collisions between iron hand projectiles and their owners
+        const isIronHandA = entityA.type === 'projectile' && (entityA as any).isIronHand
+        const isIronHandB = entityB.type === 'projectile' && (entityB as any).isIronHand
+        
+        if (isIronHandA && (entityA as any).ownerId === entityB.id) {
+          continue // Iron hand can't collide with its owner
+        }
+        if (isIronHandB && (entityB as any).ownerId === entityA.id) {
+          continue // Iron hand can't collide with its owner
         }
         
         const collision = detectCollision(entityA, entityB)
@@ -697,7 +1646,10 @@ export function updateAI(entity: CircleEntity, world: PhysicsWorld, deltaTime: n
   const timeSinceAttack = currentTime - entity.lastAttackTime
   const attackCooldown = 1000 + Math.random() * 1000 // 1-2 seconds
   
-  if (timeSinceAttack > attackCooldown && distanceToEnemy < 200) {
+  // Use dynamic attack range based on character stats
+  const attackRange = (entity as any).attackRange || 200 // Default to 200 if not set
+  
+  if (timeSinceAttack > attackCooldown && distanceToEnemy < attackRange) {
     // Find weapon to use
     const availableWeapon = weapons.find(w => w.id === entity.weaponId)
     if (availableWeapon && entity.energy && entity.energy >= availableWeapon.cost) {

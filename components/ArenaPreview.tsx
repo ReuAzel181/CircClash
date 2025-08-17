@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { ArenaSettings, Hazard } from '../data/arena'
 
 interface ArenaPreviewProps {
@@ -20,13 +20,7 @@ export default function ArenaPreview({
 }: ArenaPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
-    if (canvasRef.current) {
-      drawArena()
-    }
-  }, [settings, zoom, showGrid, selectedHazard])
-
-  const drawArena = () => {
+  const drawArena = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -60,7 +54,13 @@ export default function ArenaPreview({
     ctx.strokeStyle = '#ffffff'
     ctx.lineWidth = 2
     ctx.strokeRect(0, 0, canvas.width, canvas.height)
-  }
+  }, [settings, zoom, showGrid, selectedHazard])
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      drawArena()
+    }
+  }, [settings, zoom, showGrid, selectedHazard])
 
   const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     switch (settings.background) {
