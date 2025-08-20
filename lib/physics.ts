@@ -1,4 +1,6 @@
 // Core physics types and functions for deterministic circle-based gameplay
+import { stunTarget } from './game';
+import { getCharacterConfig } from './characterConfig';
 
 export interface Vector {
   x: number
@@ -244,10 +246,51 @@ export function detectCollision(a: CircleEntity, b: CircleEntity): Collision | n
 export function resolveCollision(collision: Collision, world: PhysicsWorld): void {
   const { entityA, entityB, normal, penetration, relativeVelocity } = collision
   
+  // Special case: Ice Wall handling
+  if ((entityA as any).isIceWall || (entityB as any).isIceWall) {
+    const iceWall = (entityA as any).isIceWall ? entityA : entityB
+    const otherEntity = (entityA as any).isIceWall ? entityB : entityA
+    
+    // Allow the Ice Knight owner to pass through their own ice wall
+    if (otherEntity.id === (iceWall as any).ownerBot && (iceWall as any).ownerCanPass) {
+      return // Skip collision resolution
+    }
+    
+    // For projectiles, destroy them on hit if not owned by the ice wall creator
+    if (otherEntity.type === 'projectile') {
+      if (otherEntity.ownerId !== (iceWall as any).ownerBot) {
+        otherEntity.health = 0 // Mark projectile for removal
+      }
+      return
+    }
+    
+    // For player entities colliding with ice wall, block movement (no bounce)
+    if (otherEntity.type === 'player') {
+      const away = Vector.normalize(Vector.subtract(otherEntity.position, iceWall.position))
+      const separation = Vector.multiply(away, Math.max(1, 4))
+      otherEntity.position = Vector.add(otherEntity.position, separation)
+      // Remove velocity component toward the wall
+      const vel = otherEntity.velocity
+      const velAlongAway = Vector.dot(vel, away)
+      if (velAlongAway < 0) {
+        const correction = Vector.multiply(away, velAlongAway)
+        otherEntity.velocity = Vector.subtract(vel, correction)
+      }
+      return
+    }
+  }
+  
   // Skip if either entity is static and the other is a projectile
   if ((entityA.isStatic || entityB.isStatic) && 
       (entityA.type === 'projectile' || entityB.type === 'projectile')) {
     return
+  }
+  
+  // Play bounce sound if the collision is significant
+  if (relativeVelocity > 50) {
+    // Import from audio utility
+    const { playBounceSound } = require('./audio')
+    playBounceSound(relativeVelocity / 300) // Normalize volume based on velocity
   }
   
   // Aggressive positional correction to prevent overlap and sliding
@@ -426,6 +469,12 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
     
     // Apply damage to target
     if (target.type === 'player' && target.health > 0) {
+      // Lightning Striker spear immobilization
+      if ((projectile as any).style === 'spear') {
+        // Get the character config for the striker to use the correct stun duration
+        const strikerConfig = getCharacterConfig('striker')
+        stunTarget(target.id, strikerConfig.stunDuration || 500) // Use config duration or fallback to 0.5 seconds
+      }
       // Check for combo invulnerability (Iron Titan during grab combo)
       const currentTime = Date.now()
       if ((target as any).comboInvulnerableUntil > currentTime) {
@@ -447,6 +496,15 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
         projectileDamage *= (1 - (target as any).damageReduction)
       }
       target.health = Math.max(0, target.health - projectileDamage)
+      
+      // Execute onHit callback if it exists
+      if (typeof (projectile as any).onHit === 'function') {
+        try {
+          (projectile as any).onHit(target.id, { ...target.position });
+        } catch (error) {
+          console.error('Error executing onHit callback:', error);
+        }
+      }
       
       // Track stacks for vortex characters when they hit enemies
       if (projectile.ownerId && world.entities.has(projectile.ownerId)) {
@@ -628,12 +686,17 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
   
   const bounceFactor = entity.restitution * 1.0 // Perfect bounce to maintain constant movement
   
+  // Import audio utility
+  const { playBounceSound } = require('./audio')
+  
   // Left boundary
   if (entity.position.x - entity.radius < 0) {
     entity.position.x = entity.radius
     entity.velocity.x = -entity.velocity.x * bounceFactor
     // Small random component for variety but maintain overall speed
     entity.velocity.y += (Math.random() - 0.5) * 20
+    // Play bounce sound with volume based on velocity
+    playBounceSound(Math.abs(entity.velocity.x) / 300)
   }
   
   // Right boundary
@@ -642,6 +705,8 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
     entity.velocity.x = -entity.velocity.x * bounceFactor
     // Small random component for variety but maintain overall speed
     entity.velocity.y += (Math.random() - 0.5) * 20
+    // Play bounce sound with volume based on velocity
+    playBounceSound(Math.abs(entity.velocity.x) / 300)
   }
   
   // Top boundary
@@ -650,6 +715,8 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
     entity.velocity.y = -entity.velocity.y * bounceFactor
     // Small random component for variety but maintain overall speed
     entity.velocity.x += (Math.random() - 0.5) * 20
+    // Play bounce sound with volume based on velocity
+    playBounceSound(Math.abs(entity.velocity.y) / 300)
   }
   
   // Bottom boundary
@@ -658,11 +725,48 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
     entity.velocity.y = -entity.velocity.y * bounceFactor
     // Small random component for variety but maintain overall speed
     entity.velocity.x += (Math.random() - 0.5) * 20
+    // Play bounce sound with volume based on velocity
+    playBounceSound(Math.abs(entity.velocity.y) / 300)
   }
 }
 
 // Main physics simulation step
 export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
+  // Harden immobilization: temporarily disable movement but preserve momentum
+  const now = Date.now();
+  for (const [id, entity] of world.entities) {
+    if ((entity as any).immobilized && (entity as any).immobilizedUntil > now) {
+      // Save original velocity before immobilization if not already saved
+      if (!(entity as any).savedVelocity) {
+        (entity as any).savedVelocity = { ...entity.velocity };
+      }
+      
+      // Only zero out acceleration to prevent additional movement
+      // but keep velocity stored for collision responses
+      entity.acceleration = { x: 0, y: 0 };
+      
+      // Allow entity to still be pushed by collisions
+      // but reduce their ability to move on their own
+      const dampingFactor = 0.2; // Allow some movement from collisions
+      entity.velocity.x *= dampingFactor;
+      entity.velocity.y *= dampingFactor;
+    } else if ((entity as any).immobilized && (entity as any).immobilizedUntil <= now) {
+      (entity as any).immobilized = false;
+      (entity as any).isStunned = false;
+      if ((entity as any).electricEffectActive) {
+        (entity as any).electricEffectActive = false;
+      }
+      // Restore saved velocity when immobilization ends
+      if ((entity as any).savedVelocity) {
+        // Blend current velocity with saved velocity to ensure smooth transition
+        entity.velocity = {
+          x: entity.velocity.x * 0.3 + (entity as any).savedVelocity.x * 0.7,
+          y: entity.velocity.y * 0.3 + (entity as any).savedVelocity.y * 0.7
+        };
+        delete (entity as any).savedVelocity; // Clean up
+      }
+    }
+  }
   world.timeAccumulator += deltaTime
   
   // Fixed timestep with accumulator pattern for determinism
@@ -1480,9 +1584,16 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
 
 // Utility functions for external use
 export function addForce(entity: CircleEntity, force: Vector): void {
-  if (!entity.isStatic) {
-    entity.acceleration = Vector.add(entity.acceleration, Vector.multiply(force, 1 / entity.mass))
+  if (entity.isStatic) return
+  // Block force application if immobilized
+  const now = Date.now();
+  if ((entity as any).immobilized && (entity as any).immobilizedUntil > now) {
+    entity.velocity = { x: 0, y: 0 };
+    entity.acceleration = { x: 0, y: 0 };
+    return;
   }
+  // Add force to entity's acceleration
+  entity.acceleration = Vector.add(entity.acceleration, force)
 }
 
 export function setVelocity(entity: CircleEntity, velocity: Vector): void {
@@ -1597,30 +1708,30 @@ export function regenerateEnergy(entity: CircleEntity, dt: number): void {
 // AI Combat System
 export function updateAI(entity: CircleEntity, world: PhysicsWorld, deltaTime: number, weapons: any[]): void {
   if (!entity.id.includes('ai') && !entity.id.includes('bot')) return
-  
+  // Block AI movement if immobilized
+  const now = Date.now();
+  if ((entity as any).immobilized && (entity as any).immobilizedUntil > now) {
+    entity.velocity = { x: 0, y: 0 };
+    entity.acceleration = { x: 0, y: 0 };
+    return;
+  }
   const currentTime = Date.now()
-  
   // Find nearest enemy
   let nearestEnemy: CircleEntity | null = null
   let nearestDistance = Infinity
-  
   for (const [id, otherEntity] of world.entities) {
     if (otherEntity === entity || otherEntity.health <= 0) continue
     if (entity.id.includes('bot') && otherEntity.id.includes('bot')) continue // Bots don't fight each other
-    
     const distance = Vector.distance(entity.position, otherEntity.position)
     if (distance < nearestDistance) {
       nearestDistance = distance
       nearestEnemy = otherEntity
     }
   }
-  
   if (!nearestEnemy) return
-  
   // AI Behavior based on distance and health
   const healthRatio = entity.health / entity.maxHealth
   const distanceToEnemy = nearestDistance
-  
   // Movement AI
   if (distanceToEnemy > 100) {
     // Move towards enemy

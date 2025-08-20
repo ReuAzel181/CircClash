@@ -62,8 +62,8 @@ const characters = [
     name: 'Ice Knight', 
     icon: '❄️', 
     stats: { health: 85, attack: 70, defense: 85, speed: 60, range: 300 },
-    skill: 'Ice Blast',
-    description: 'Large, slow-moving ice projectiles that freeze enemies'
+    skill: 'Frost Barrier',
+    description: 'Summons protective ice barriers and wields a freezing blade in close combat'
   },
   { 
     id: 'shadow', 
@@ -207,6 +207,10 @@ export default function BattleRoyalePage() {
   }
 
   const handleStartGame = () => {
+    // Initialize audio before starting the game
+    const { initAudio } = require('../../lib/audio');
+    initAudio();
+    
     initializeGame()
     pauseGame() // Start paused so user can edit stats first
     setGameState('paused')
@@ -222,6 +226,10 @@ export default function BattleRoyalePage() {
   }
 
   const handleResumeGame = () => {
+    // Initialize audio before resuming the game
+    const { initAudio } = require('../../lib/audio');
+    initAudio();
+    
     applyAllStatsToGame()
     resumeGame()
     setGameState('playing')

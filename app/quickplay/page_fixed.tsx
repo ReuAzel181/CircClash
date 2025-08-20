@@ -62,8 +62,8 @@ const characters = [
     name: 'Ice Knight', 
     icon: '❄️', 
     stats: { health: 270, attack: 33, defense: 85, speed: 42, range: 210 },
-    skill: 'Ice Wall',
-    description: 'Creates temporary ice barriers that block projectiles and slow nearby enemies'
+    skill: 'Frost Barrier',
+    description: 'Automatically summons Ice Walls every 5 seconds that block projectiles and allow phase-through while bouncing enemies'
   },
   { 
     id: 'shadow', 
@@ -212,6 +212,10 @@ export default function QuickPlayPage() {
   const handleStartGame = () => {
     if (selectedFighters.length < 2) return
     
+    // Initialize audio before starting the game
+    const { initAudio } = require('../../lib/audio');
+    initAudio();
+    
     // Stop any existing game first
     stopGame()
     
@@ -252,6 +256,10 @@ export default function QuickPlayPage() {
   }
 
   const handleResumeGame = () => {
+    // Initialize audio before resuming the game
+    const { initAudio } = require('../../lib/audio');
+    initAudio();
+    
     resumeGame()
     setGameState('playing')
   }

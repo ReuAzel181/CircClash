@@ -46,6 +46,10 @@ export function startGame(config: GameConfig): GameState {
   if (currentGame) {
     stopGame()
   }
+  
+  // Initialize audio system
+  const { initAudio } = require('./audio');
+  initAudio();
 
   // Create new game state
   const world = createPhysicsWorld(config.arenaWidth, config.arenaHeight)
@@ -115,16 +119,33 @@ export function stopGame(): void {
 
 // Main game loop with fixed timestep
 function updateGame(currentTime: number): void {
-  if (!currentGame || !currentGame.isRunning) return
+  if (!currentGame || !currentGame.isRunning) {
+    console.log(`Game loop skipped - currentGame: ${!!currentGame}, isRunning: ${currentGame?.isRunning}`);
+    return;
+  }
   
   const deltaTime = Math.min((currentTime - lastFrameTime) / 1000, 1/30) // Cap at 30fps minimum
   lastFrameTime = currentTime
   
   // Update AI for all bots
   for (const [id, entity] of currentGame.world.entities) {
+    // Check if immobilization period has ended
+    if ((entity as any).immobilized && (entity as any).immobilizedUntil <= Date.now()) {
+      // Clear immobilization flags
+      (entity as any).immobilized = false;
+      (entity as any).isStunned = false;
+      (entity as any).electricEffectActive = false;
+      delete (entity as any).immobilizedUntil;
+    }
+    
+    // Prevent movement if immobilized (check timestamp)
+    if ((entity as any).immobilized && (entity as any).immobilizedUntil > Date.now()) {
+      entity.velocity = Vector.create(0, 0);
+      entity.acceleration = Vector.create(0, 0);
+      continue;
+    }
     if ((entity as any).isBot && entity.health > 0) {
       updateBotAI(id)
-      // Pure physics movement - no velocity modification
     }
   }
   
@@ -242,6 +263,22 @@ export function spawnBot(
   ;(bot as any).aiCooldown = 0
   ;(bot as any).attackRange = config?.attackRange || 300 // Fallback for safety
   ;(bot as any).activeTimeouts = [] // Initialize timeout tracking
+
+  // Initialize range indicator and weapon state for Ice Knight
+  if (characterType === 'frost') {
+    ;(bot as any).showRangeIndicator = false
+    ;(bot as any).rangeIndicatorRadius = config?.attackRange || 300 // Exact ramming detection radius
+    ;(bot as any).rangeIndicatorStyle = 'stroke'
+    ;(bot as any).rangeIndicatorColor = '#06b6d4' // Cyan color for ice theme
+    ;(bot as any).rangeIndicatorOpacity = 0.5 // Semi-transparent
+    ;(bot as any).rangeIndicatorThickness = 2 // 2px thick stroke
+    ;(bot as any).showWeapon = false
+    ;(bot as any).weaponState = {
+      visible: false,
+      swinging: false
+    }
+    ;(bot as any).isDashing = false
+  }
   
   currentGame.world.entities.set(botId, bot)
   currentGame.players.set(botId, bot)
@@ -368,6 +405,13 @@ export function fireProjectile(
       if (weaponData.vortexDamageRate !== undefined) {
         ;(projectile as any).vortexDamageRate = weaponData.vortexDamageRate
       }
+// Handle onHit callback
+      if (weaponData.onHit !== undefined) {
+        ;(projectile as any).onHit = weaponData.onHit;
+      }
+      if (weaponData.style !== undefined) {
+        ;(projectile as any).style = weaponData.style;
+      }
     }
     
     // Apply special abilities based on character type
@@ -439,12 +483,12 @@ export function fireProjectile(
         break
         
       case 'energywave':
-        ;(projectile as any).isEnergyWave = true
-        ;(projectile as any).waveGrowthRate = config.waveGrowthRate || 1.5
-        ;(projectile as any).damageOverTime = config.damageOverTime || 15
-        ;(projectile as any).dotDuration = config.dotDuration || 3000
-        ;(projectile as any).slowEffectStrength = config.slowEffectStrength || 0.4
-        ;(projectile as any).slowDuration = config.slowDuration || 4000
+        ;(projectile as any).isEnergyWave = weaponData.isEnergyWave !== undefined ? weaponData.isEnergyWave : true
+        ;(projectile as any).waveGrowthRate = weaponData.waveGrowthRate || config.waveGrowthRate || 1.5
+        ;(projectile as any).damageOverTime = weaponData.damageOverTime || config.damageOverTime || 15
+        ;(projectile as any).dotDuration = weaponData.dotDuration || config.dotDuration || 3000
+        ;(projectile as any).slowEffectStrength = weaponData.slowEffectStrength || config.slowEffectStrength || 0.4
+        ;(projectile as any).slowDuration = weaponData.slowDuration || config.slowDuration || 4000
         ;(projectile as any).originalRadius = projectile.radius
         ;(projectile as any).distanceTraveled = 0
         ;(projectile as any).affectedTargets = new Set() // Track who's been hit for DOT
@@ -521,10 +565,13 @@ export function fireProjectile(
 
 export function movePlayer(playerId: string, direction: Vector, force: number = 800): void {
   if (!currentGame) return
-  
   const player = currentGame.world.entities.get(playerId)
   if (!player || player.isStatic) return
-  
+  if ((player as any).immobilized && (player as any).immobilizedUntil > Date.now()) {
+    player.velocity = Vector.create(0, 0);
+    player.acceleration = Vector.create(0, 0);
+    return;
+  }
   const moveForce = Vector.multiply(Vector.normalize(direction), force)
   addForce(player, moveForce)
 }
@@ -650,6 +697,63 @@ export function updateBotAI(botId: string): void {
   // DO NOT modify velocity - let physics handle movement
   // Characters should only change direction when bouncing off walls/entities
   
+  // Handle character-specific passive abilities that run independently of enemy detection
+  if (characterType === 'frost') {
+    // Passive: Frost Barrier (Ice Wall) - runs every 5 seconds regardless of enemies
+    if ((bot as any).lastBarrierTime === undefined) (bot as any).lastBarrierTime = Date.now();
+    const lastBarrierTime = (bot as any).lastBarrierTime;
+    const currentTime = Date.now();
+    
+    if (currentTime - lastBarrierTime >= (config.barrierCooldown || 5000)) { // Every 5 seconds
+      // Create ice wall slightly in front of the Ice Knight
+      const wallDistance = 30; // Distance in front of the knight
+      // Use movement direction if available, otherwise use facing direction, fallback to right
+      let facingDirection = (bot as any).facingDirection;
+      if (!facingDirection && bot.velocity && (Math.abs(bot.velocity.x) > 10 || Math.abs(bot.velocity.y) > 10)) {
+        facingDirection = Vector.normalize(bot.velocity);
+      }
+      if (!facingDirection) {
+        facingDirection = { x: 1, y: 0 }; // Default to right
+      }
+      const wallX = bot.position.x + facingDirection.x * wallDistance;
+      const wallY = bot.position.y + facingDirection.y * wallDistance;
+      
+      const barrier = createProjectile(
+        `${botId}_icewall_${Date.now()}`,
+        wallX,
+        wallY,
+        Vector.create(0, 0),
+        0,
+        botId,
+        config.barrierDuration || 3000, // Lasts for 3 seconds by default
+        'frost'
+      );
+      barrier.damage = 0;
+      // Increase radius slightly for better collision approximation, independent of visual wall length
+      barrier.radius = Math.max(config.bulletRadius * (config.barrierSize || 3.5), 18); // Ensure minimum visible collision size
+      barrier.isStatic = true;
+      // Set barrier properties
+      (barrier as any).style = 'barrier';
+      (barrier as any).shape = 'wall'; // Wall shape instead of dome
+      barrier.type = 'projectile'; // Ensure it's treated as a projectile for rendering
+      (barrier as any).solid = true;
+      (barrier as any).destroyProjectilesOnHit = true; // Destroy projectiles that hit it
+      (barrier as any).blockEnemies = true; // Block enemies instead of bouncing
+      (barrier as any).isIceWall = true; // Important flag for rendering
+      (barrier as any).ownerBot = botId; // Track owner for phasing through
+      (barrier as any).ownerCanPass = true; // Ice Knight can pass through freely
+      (barrier as any).characterType = 'frost'; // Ensure character type is set for proper rendering
+      (barrier as any).spawnTime = Date.now(); // Ensure lifetime works and barrier persists for rendering
+      // Visual dimensions and orientation for renderer
+      (barrier as any).wallLength = (config as any).barrierWallLength || 120; // in world units
+      (barrier as any).wallThickness = (config as any).barrierWallThickness || 24; // in world units
+      (barrier as any).facingDirection = { x: facingDirection.x, y: facingDirection.y };
+      currentGame.world.entities.set(barrier.id, barrier);
+      console.log(`Ice wall created with ID: ${barrier.id}, radius: ${barrier.radius}, isIceWall: ${(barrier as any).isIceWall}, position: (${wallX.toFixed(1)}, ${wallY.toFixed(1)})`);
+      (bot as any).lastBarrierTime = currentTime;
+    }
+  }
+  
   // Find nearest enemy for targeting (shooting only)
   let nearestEnemy: CircleEntity | null = null
   let nearestDistance = Infinity
@@ -712,6 +816,85 @@ export function updateBotAI(botId: string): void {
       
       // Aim at predicted position with some accuracy variation
 // Character-specific attack function with unique mechanics
+// Helper: Stun a target for a duration (ms)
+// Helper: Create an electric field at a position, damaging nearby enemies over time
+function createElectricField(position: Vector, opts: { radius: number, duration: number, damage: number, tickRate: number, sourceId: string }) {
+  const fieldId = `electric_field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const field = createCircleEntity(fieldId, position.x, position.y, opts.radius, 'hazard');
+  field.isStatic = true;
+  field.damage = 0;
+  field.lifetime = opts.duration;
+  (field as any).isElectricField = true;
+  (field as any).sourceId = opts.sourceId;
+  (field as any).tickRate = opts.tickRate;
+  (field as any).fieldDamage = opts.damage;
+  (field as any).spawnTime = Date.now();
+  currentGame?.world.entities.set(fieldId, field);
+
+  // Damage nearby enemies every tick
+  const tick = () => {
+    if (!currentGame?.world.entities.has(fieldId)) return;
+    for (const [id, entity] of currentGame.world.entities) {
+      if (entity.type !== 'player' || entity.health <= 0 || id === opts.sourceId) continue;
+      const dist = Vector.distance(position, entity.position);
+      if (dist <= opts.radius) {
+        entity.health -= opts.damage;
+      }
+    }
+    // Continue ticking if field still exists
+    if (Date.now() - (field as any).spawnTime < opts.duration) {
+      setTimeout(tick, opts.tickRate);
+    } else {
+      currentGame.world.entities.delete(fieldId);
+    }
+  };
+  setTimeout(tick, opts.tickRate);
+}
+function stunTarget(targetId: string, duration: number) {
+  const entity = currentGame?.world.entities.get(targetId);
+  if (!entity) return;
+  const now = Date.now();
+  (entity as any).isStunned = true;
+  (entity as any).immobilized = true;
+  (entity as any).immobilizedUntil = now + duration;
+  
+  // Save velocity before immobilizing instead of setting to zero
+  // This allows momentum to be preserved when immobilization ends
+  if (!(entity as any).savedVelocity) {
+    (entity as any).savedVelocity = { ...entity.velocity };
+  }
+  
+  // Always enable electric effect for visual feedback
+  (entity as any).electricEffectActive = true;
+  
+  // No shock sound effect - removed as requested
+  // Visual electric effect is still active
+  
+  // Set a timeout to ensure immobilization is cleared after duration
+  const clearStunTimeout = setTimeout(() => {
+    const entityAfterTimeout = currentGame?.world.entities.get(targetId);
+    if (entityAfterTimeout) {
+      (entityAfterTimeout as any).immobilized = false;
+      (entityAfterTimeout as any).isStunned = false;
+      (entityAfterTimeout as any).electricEffectActive = false;
+      
+      // Restore saved velocity
+      if ((entityAfterTimeout as any).savedVelocity) {
+        entityAfterTimeout.velocity = {
+          x: entityAfterTimeout.velocity.x * 0.3 + (entityAfterTimeout as any).savedVelocity.x * 0.7,
+          y: entityAfterTimeout.velocity.y * 0.3 + (entityAfterTimeout as any).savedVelocity.y * 0.7
+        };
+        delete (entityAfterTimeout as any).savedVelocity;
+      }
+    }
+  }, duration);
+  
+  // Store the timeout for cleanup
+  (entity as any).activeTimeouts = (entity as any).activeTimeouts || [];
+  (entity as any).activeTimeouts.push(clearStunTimeout);
+}
+export { stunTarget };
+
 function fireCharacterSpecificAttack(botId: string, direction: Vector, characterType: string): void {
   const config = getCharacterConfig(characterType)
   const bot = currentGame?.world.entities.get(botId)
@@ -998,39 +1181,195 @@ function fireCharacterSpecificAttack(botId: string, direction: Vector, character
       })
       break
       
-    case 'frost': // Ice Knight - Slow ice blast with area effect
-      fireProjectile(botId, normalizedDir, { 
-        baseDamage: config.damage * 1.3, 
-        projectileSpeed: config.projectileSpeed,
-        radius: config.bulletRadius * 1.6,
-        freezing: true // Special ice effect
-      })
-      break
+    case 'frost': // Ice Knight - Pure Dash Attack with Dome Barrier
+      // Only execute dash attack when enemy is nearby
+      let nearestEnemy: CircleEntity | null = null
+      let shortestDistance = config.attackRange || 300;
       
+      // Hide attack range indicator (per request)
+      (bot as any).showRangeIndicator = false;
+      (bot as any).rangeIndicatorRadius = config.attackRange || 200; // Reduced from 300 to match actual detection range
+      (bot as any).rangeIndicatorStyle = 'stroke';
+      (bot as any).rangeIndicatorColor = '#06b6d4'; // Cyan color for ice theme
+      (bot as any).rangeIndicatorOpacity = 0.5; // Semi-transparent
+      (bot as any).rangeIndicatorThickness = 2; // Make the line more visible
+      
+      // Initialize weapon state if not already set
+      if (!(bot as any).weaponState) {
+        (bot as any).weaponState = {
+          visible: false,
+          swinging: false,
+          direction: { x: 1, y: 0 }
+        };
+      }
+      
+      // Track if any enemy is in weapon visibility range
+      let enemyInWeaponRange = false;
+      
+      // Actively seek nearest enemy within range and handle weapon visibility
+      for (const [id, entity] of currentGame.world.entities) {
+        if (id === botId || entity.type !== 'player' || entity.health <= 0) continue
+        const distance = Vector.distance(bot.position, entity.position)
+        
+        // Update nearest enemy if in valid range for dashing
+        if (distance < shortestDistance && distance > (config.primaryAttack?.minimumRange || 50)) {
+          shortestDistance = distance
+          nearestEnemy = entity
+          // Update facing direction toward the nearest enemy
+          ;(bot as any).facingDirection = Vector.normalize(Vector.subtract(entity.position, bot.position))
+        }
+        
+        // Only show weapon during dash attacks
+        if (distance <= (config.weaponVisibilityRange || 400) && (bot as any).isDashing) {
+          enemyInWeaponRange = true;
+          (bot as any).showWeapon = true;
+          (bot as any).weaponState = {
+            visible: true,
+            swinging: true, // Always swinging during dash
+            direction: Vector.normalize(Vector.subtract(entity.position, bot.position)),
+            swingStartTime: Date.now() // Add swing start time for animation
+          };
+          break; // Exit loop once we find a valid enemy in range
+        }
+      }
+      
+      // Hide weapon only if no enemies are in weapon visibility range
+      if (!enemyInWeaponRange) {
+        (bot as any).showWeapon = false;
+        (bot as any).weaponState = {
+          visible: false,
+          swinging: false
+        };
+      }
+
+      // Actively dash and attack when enemy is in range
+      if (nearestEnemy) {
+        const dashDir = Vector.normalize(Vector.subtract(nearestEnemy.position, bot.position))
+        const lastDashTime = (bot as any).lastDashTime || 0
+        const now = Date.now()
+        
+        const readyToDash = now - lastDashTime >= (config.primaryAttack?.dashCooldown || 800)
+        const inDashRange = shortestDistance <= (config.dashRange || 250)
+        
+        if (readyToDash && inDashRange) {
+          // Start dash attack sequence
+          (bot as any).isDashing = true;
+          (bot as any).showWeapon = true; // Show weapon during dash
+          (bot as any).weaponState = {
+            visible: true,
+            swinging: true,
+            swingStartTime: Date.now(), // Track swing animation start time
+            direction: Vector.normalize(Vector.subtract(nearestEnemy.position, bot.position)) // Point weapon toward enemy
+          };
+          (bot as any).targetEnemy = nearestEnemy.id // Track target for consistent attacks
+          
+          // Create enhanced melee dash attack projectile
+          const projectile = createProjectile(
+            `${botId}_dash_${Date.now()}`,
+            bot.position.x,
+            bot.position.y,
+            dashDir,
+            config.dashSpeed || 800, // Increased dash speed
+            botId,
+            (config.dashRange || 250) / (config.dashSpeed || 800) * 1000,
+            'frost'
+          );
+          projectile.damage = config.damage * 1.5; // Increased melee damage
+          projectile.radius = config.bulletRadius * 1.2; // Larger hit area
+          (projectile as any).style = 'dash';
+          (projectile as any).shape = 'charge';
+          (projectile as any).noBullets = true;
+          (projectile as any).pureCharge = true;
+          (projectile as any).isDashProjectile = true;
+          
+          // Move the bot with the dash projectile
+          bot.velocity = Vector.multiply(dashDir, config.dashSpeed || 800);
+          
+          // Update bot position during dash
+          const dashUpdateInterval = setInterval(() => {
+            if (currentGame?.world.entities.has(botId) && currentGame.world.entities.has(projectile.id)) {
+              bot.position = projectile.position;
+            } else {
+              clearInterval(dashUpdateInterval);
+            }
+          }, 16); // Update at ~60fps
+          (bot as any).activeTimeouts.push(dashUpdateInterval);
+
+          // Reset weapon state after dash duration
+          const dashDuration = (config.dashRange || 250) / (config.dashSpeed || 800) * 1000;
+          const dashTimeout = setTimeout(() => {
+            if (currentGame?.world.entities.has(botId)) {
+              (bot as any).isDashing = false;
+              (bot as any).weaponState = {
+                visible: false,
+                swinging: false
+              };
+              (bot as any).lastDashTime = Date.now();
+            }
+          }, dashDuration);
+          (bot as any).activeTimeouts.push(dashTimeout);
+          (projectile as any).swingWeapon = true; // Enable weapon swing animation
+          (projectile as any).swingAngle = config.primaryAttack?.swingAngle || 120; // Wide swing arc
+          (projectile as any).swingDuration = config.primaryAttack?.swingDuration || 400; // Smooth swing animation
+          currentGame.world.entities.set(projectile.id, projectile);
+          
+          // Schedule end of dash sequence
+          const dashEndTimeout = setTimeout(() => {
+            if (!currentGame?.world.entities.has(botId)) return;
+            (bot as any).isDashing = false;
+            // Only hide weapon if no enemies are in range
+            if (!nearestEnemy || Vector.distance(bot.position, nearestEnemy.position) > (config.weaponVisibilityRange || 400)) {
+              (bot as any).showWeapon = false;
+              (bot as any).weaponState = {
+                visible: false,
+                swinging: false
+              };
+            } else {
+              // Keep weapon visible but stop swinging
+              (bot as any).weaponState = {
+                visible: true,
+                swinging: false
+              };
+            }
+          }, (config.dashRange || 250) / (config.dashSpeed || 600) * 1000);
+          (bot as any).activeTimeouts.push(dashEndTimeout);
+          (bot as any).lastDashTime = now;
+        }
+      }
+      break;
+
     case 'mystic': // Mystic Orb - Homing magical missiles
       for (let i = 0; i < 2; i++) {
         const timeout = setTimeout(() => {
-          if (!currentGame?.world.entities.has(botId)) return
+          if (!currentGame?.world.entities.has(botId)) return;
           
           fireProjectile(botId, normalizedDir, { 
             baseDamage: config.damage * 0.9, 
             projectileSpeed: config.projectileSpeed * 0.9,
             radius: config.bulletRadius,
             homing: true // Will track nearest enemy
-          })
-        }, i * 150)
-        ;(bot as any).activeTimeouts.push(timeout)
+          });
+        }, i * 150);
+          (bot as any).activeTimeouts.push(timeout);
       }
-      break
+      break;
       
-    case 'striker': // Lightning Striker - Electric chain attack
-      fireProjectile(botId, normalizedDir, { 
-        baseDamage: config.damage, 
+    case 'striker': // Lightning Striker - Chain Surge ability
+      fireProjectile(botId, normalizedDir, {
+        baseDamage: config.damage,
         projectileSpeed: config.projectileSpeed,
         radius: config.bulletRadius,
-        electric: true, // Can chain to nearby enemies
-        piercing: 1
-      })
+        characterType: 'striker', // Ensure character type is set for proper rendering
+        trailEffect: true,
+        glowEffect: true,
+        electricVibe: true,
+        electricColor: config.electricColor || '#e0e7ff',
+        electricParticles: true,
+        style: 'spear', // Set style to spear for immobilization logic
+        onHit: (targetId: string, hitPos: Vector) => {
+          stunTarget(targetId, config.stunDuration || 500); // 0.5 second immobilization
+        }
+      });
       break
       
     default: // Default fallback

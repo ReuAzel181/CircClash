@@ -249,10 +249,21 @@ export default function GameCanvas({
     // Draw grid background
     drawGrid(ctx, canvas.width, canvas.height, 1, themeColors.grid)
     
-    // Draw entities
+    // Draw entities in proper order: projectiles first (background), then players (foreground)
     const entities = getGameEntities()
+    
+    // First pass: Draw all projectiles (including ice walls) in the background
     entities.forEach(entity => {
-      drawEntity(ctx, entity, 1, playerId, theme)
+      if (entity.type === 'projectile') {
+        drawEntity(ctx, entity, 1, playerId, theme)
+      }
+    })
+    
+    // Second pass: Draw all players and other entities in the foreground
+    entities.forEach(entity => {
+      if (entity.type !== 'projectile') {
+        drawEntity(ctx, entity, 1, playerId, theme)
+      }
     })
     
     // Draw UI overlays
@@ -362,6 +373,48 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
   const themeColors = getThemeColors(theme)
   
   ctx.save()
+
+  // Draw range indicator if enabled
+  if ((entity as any).showRangeIndicator) {
+    ctx.beginPath()
+    ctx.arc(x, y, ((entity as any).rangeIndicatorRadius as number) * scale, 0, 2 * Math.PI)
+    ctx.strokeStyle = ((entity as any).rangeIndicatorColor as string) || '#06b6d4'
+    ctx.globalAlpha = ((entity as any).rangeIndicatorOpacity as number) || 0.5
+    ctx.lineWidth = ((entity as any).rangeIndicatorThickness as number) || 2
+    if ((entity as any).rangeIndicatorStyle === 'stroke') {
+      ctx.stroke()
+    } else {
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
+  }
+
+  // Draw weapon if visible
+  if (((entity as any).showWeapon === true) && ((entity as any).weaponState?.visible === true)) {
+    const characterType = getCharacterType(entity.id)
+    const config = getCharacterConfig(characterType)
+    
+    ctx.save()
+    ctx.translate(x, y)
+    
+    // Draw weapon with swing animation if active
+    if ((entity as any).weaponState?.swinging) {
+      const swingProgress = ((Date.now() - (((entity as any).weaponState.swingStartTime as number) || Date.now())) % (config.primaryAttack?.swingDuration || 400)) / (config.primaryAttack?.swingDuration || 400)
+      const swingAngle = ((config.primaryAttack?.swingAngle || 120) * Math.PI / 180) * Math.sin(swingProgress * Math.PI)
+      ctx.rotate(swingAngle)
+    }
+    
+    // Draw the weapon (blade)
+    ctx.beginPath()
+    ctx.moveTo(0, -radius * 0.5)
+    ctx.lineTo(radius * 1.5, 0)
+    ctx.lineTo(0, radius * 0.5)
+    ctx.closePath()
+    ctx.fillStyle = config.color
+    ctx.globalAlpha = 0.8
+    ctx.fill()
+    ctx.restore()
+  }
   
   // Draw entity based on type
   switch (entity.type) {
@@ -509,6 +562,71 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
           }
           
           ctx.globalAlpha = 1
+        } else if (characterType === 'frost') {
+          // Ice Knight - Range indicator and weapon rendering
+          if ((entity as any).showRangeIndicator) {
+            ctx.strokeStyle = (entity as any).rangeIndicatorColor || '#06b6d4'
+            ctx.lineWidth = (entity as any).rangeIndicatorThickness || 2
+            ctx.globalAlpha = (entity as any).rangeIndicatorOpacity || 0.5
+            
+            ctx.beginPath()
+            ctx.arc(x, y, ((entity as any).rangeIndicatorRadius || 200) * scale, 0, 2 * Math.PI)
+            ctx.stroke()
+            ctx.globalAlpha = 1
+          }
+
+          // Weapon rendering - only show during dash attacks and make it much larger
+          if ((entity as any).showWeapon && (entity as any).weaponState?.visible && (entity as any).isDashing) {
+            const weaponLength = radius * 3.5 // Much larger weapon
+            const weaponWidth = radius * 0.8 // Wider weapon
+            
+            // Get weapon direction, default to entity's facing direction if not specified
+            const weaponDir = (entity as any).weaponState.direction || { x: 1, y: 0 }
+            const weaponAngle = Math.atan2(weaponDir.y, weaponDir.x)
+            
+            // Calculate weapon position
+            const weaponX = x + Math.cos(weaponAngle) * radius
+            const weaponY = y + Math.sin(weaponAngle) * radius
+            
+            // Draw weapon with ice theme
+            ctx.save()
+            ctx.translate(weaponX, weaponY)
+            ctx.rotate(weaponAngle)
+            
+            // Weapon swing animation
+            if ((entity as any).weaponState.swinging) {
+              const swingProgress = ((Date.now() - ((entity as any).weaponState.swingStartTime || Date.now())) % 500) / 500
+              const swingAngle = Math.sin(swingProgress * Math.PI * 2) * Math.PI / 3
+              ctx.rotate(swingAngle)
+            }
+            
+            // Draw ice blade
+            ctx.fillStyle = '#06b6d4'
+            ctx.globalAlpha = 0.8
+            ctx.beginPath()
+            ctx.moveTo(0, -weaponWidth/2)
+            ctx.lineTo(weaponLength, 0)
+            ctx.lineTo(0, weaponWidth/2)
+            ctx.closePath()
+            ctx.fill()
+            
+            // Ice crystal effects
+            const crystalCount = 5
+            for (let i = 0; i < crystalCount; i++) {
+              const progress = i / (crystalCount - 1)
+              const crystalX = weaponLength * progress
+              const crystalSize = weaponWidth * 0.3 * (1 - progress)
+              
+              ctx.fillStyle = '#a5f3fc'
+              ctx.globalAlpha = 0.6
+              ctx.beginPath()
+              ctx.arc(crystalX, 0, crystalSize, 0, 2 * Math.PI)
+              ctx.fill()
+            }
+            
+            ctx.restore()
+            ctx.globalAlpha = 1
+          }
         } else if (characterType === 'titan') {
           // Iron Titan - Heavy industrial appearance with ground slam indicators
           ctx.strokeStyle = '#16a34a' // Bright green for power lines
@@ -749,7 +867,200 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
         ctx.strokeStyle = '#ffffff'
         ctx.lineWidth = 1
         
-        switch (config.bulletShape) {
+        // Use projectile's shape if available, otherwise use character's bulletShape
+        const projectileShape = (projectile as any).shape || config.bulletShape
+        
+        switch (projectileShape) {
+          case 'thunder': // Lightning Striker - enhanced jagged lightning
+            ctx.save();
+            // Calculate angle from velocity
+            let angle = 0;
+            if (projectile.velocity && (projectile.velocity.x !== 0 || projectile.velocity.y !== 0)) {
+              angle = Math.atan2(projectile.velocity.y, projectile.velocity.x);
+            }
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            
+            // Draw main lightning bolt with enhanced visuals
+            ctx.beginPath();
+            ctx.moveTo(0, -radius * 1.5);
+            ctx.lineTo(radius * 0.3, -radius * 0.9);
+            ctx.lineTo(-radius * 0.2, -radius * 0.6);
+            ctx.lineTo(radius * 0.4, -radius * 0.3);
+            ctx.lineTo(-radius * 0.1, 0);
+            ctx.lineTo(radius * 0.2, radius * 0.3);
+            ctx.lineTo(0, radius * 0.15);
+            ctx.lineTo(-radius * 0.3, radius * 0.4);
+            ctx.lineTo(-radius * 0.1, 0);
+            ctx.lineTo(-radius * 0.4, -radius * 0.3);
+            ctx.lineTo(radius * 0.2, -radius * 0.6);
+            ctx.lineTo(-radius * 0.3, -radius * 0.9);
+            ctx.closePath();
+            
+            // Enhanced glow effect
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#fbbf24'; // More vibrant yellow glow
+            ctx.shadowBlur = 20;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Add inner bright core
+            ctx.beginPath();
+            ctx.moveTo(0, -radius * 1.3);
+            ctx.lineTo(radius * 0.2, -radius * 0.8);
+            ctx.lineTo(-radius * 0.15, -radius * 0.55);
+            ctx.lineTo(radius * 0.3, -radius * 0.25);
+            ctx.lineTo(-radius * 0.08, 0);
+            ctx.lineTo(radius * 0.15, radius * 0.25);
+            ctx.lineTo(0, radius * 0.1);
+            ctx.lineTo(-radius * 0.25, radius * 0.35);
+            ctx.lineTo(-radius * 0.08, 0);
+            ctx.lineTo(-radius * 0.35, -radius * 0.25);
+            ctx.lineTo(radius * 0.15, -radius * 0.55);
+            ctx.lineTo(-radius * 0.25, -radius * 0.8);
+            ctx.closePath();
+            
+            ctx.fillStyle = '#fde68a'; // Light yellow core
+            ctx.fill();
+            
+            // Add electric sparks around the bolt
+            ctx.fillStyle = '#fbbf24';
+            for (let i = 0; i < 5; i++) {
+              const sparkAngle = (i * Math.PI * 2) / 5;
+              const sparkDistance = radius * (0.8 + Math.random() * 0.4);
+              const sparkX = Math.cos(sparkAngle) * sparkDistance;
+              const sparkY = Math.sin(sparkAngle) * sparkDistance;
+              const sparkSize = 1 + Math.random() * 2;
+              
+              ctx.beginPath();
+              ctx.arc(sparkX, sparkY, sparkSize, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+            
+            ctx.restore();
+            break;
+  // Shock effect for stunned enemies
+  if (entity.type === 'player' && (entity as any).isStunned && (entity as any).electricEffectActive) {
+    ctx.save();
+    
+    // Get character-specific config for electric effects
+    const characterType = getCharacterType(entity.id);
+    const config = getCharacterConfig(characterType);
+    const electricColor = config.electricColor || '#4f46e5';
+    
+    // Draw multiple pulsing circles for enhanced electric effect
+    const time = Date.now() * 0.01;
+    const baseRadius = entity.radius * scale * 1.2;
+    
+    // Add glow effect
+    ctx.shadowColor = electricColor;
+    ctx.shadowBlur = 15;
+    
+    // Outer pulsing circles
+    for (let i = 0; i < 3; i++) {
+      const pulse = Math.sin(time * 2 + i) * 0.3 + 0.7;
+      const radius = baseRadius * (1 + i * 0.3) * pulse;
+      
+      ctx.beginPath();
+      ctx.arc(entity.position.x, entity.position.y, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = electricColor;
+      ctx.lineWidth = 3 - i;
+      ctx.globalAlpha = 0.7 - i * 0.15; // Increased visibility
+      ctx.stroke();
+    }
+    
+    // Add lightning bolts around the entity
+    const boltCount = 5;
+    const maxOffset = entity.radius * scale * 1.5;
+    
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = electricColor;
+    ctx.globalAlpha = 0.8;
+    
+    for (let i = 0; i < boltCount; i++) {
+      const angle = (Math.PI * 2 * i / boltCount) + (time * 0.1);
+      const startX = entity.position.x + Math.cos(angle) * baseRadius;
+      const startY = entity.position.y + Math.sin(angle) * baseRadius;
+      const endX = entity.position.x + Math.cos(angle) * maxOffset;
+      const endY = entity.position.y + Math.sin(angle) * maxOffset;
+      
+      // Draw jagged lightning bolt
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      
+      const segments = 3;
+      for (let j = 1; j <= segments; j++) {
+        const t = j / segments;
+        const xPos = startX + (endX - startX) * t;
+        const yPos = startY + (endY - startY) * t;
+        const offset = Math.sin(time * 3 + i + j) * entity.radius * scale * 0.3;
+        
+        ctx.lineTo(
+          xPos + Math.cos(angle + Math.PI/2) * offset,
+          yPos + Math.sin(angle + Math.PI/2) * offset
+        );
+      }
+      
+      ctx.stroke();
+    }
+    
+    // Add crackling lightning bolts
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * Math.PI * 2) / 6 + time;
+      const innerRadius = baseRadius * 0.5;
+      const outerRadius = baseRadius * 1.5;
+      const startX = entity.position.x + Math.cos(angle) * innerRadius;
+      const startY = entity.position.y + Math.sin(angle) * innerRadius;
+      const endX = entity.position.x + Math.cos(angle + Math.sin(time * 2 + i) * 0.5) * outerRadius;
+      const endY = entity.position.y + Math.sin(angle + Math.sin(time * 2 + i) * 0.5) * outerRadius;
+      
+      // Create zigzag lightning effect
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      
+      const segments = 4;
+      for (let j = 1; j <= segments; j++) {
+        const t = j / segments;
+        const midX = startX + (endX - startX) * t;
+        const midY = startY + (endY - startY) * t;
+        
+        // Add random offset for zigzag effect
+        if (j < segments) {
+          const offsetAngle = angle + Math.PI / 2;
+          const offset = Math.sin(time * 3 + i + j) * 10;
+          const zigzagX = midX + Math.cos(offsetAngle) * offset;
+          const zigzagY = midY + Math.sin(offsetAngle) * offset;
+          ctx.lineTo(zigzagX, zigzagY);
+        } else {
+          ctx.lineTo(endX, endY);
+        }
+      }
+      
+      ctx.stroke();
+    }
+    
+    // Add electric sparks
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 8; i++) {
+      const sparkAngle = (i * Math.PI * 2) / 8 + time;
+      const sparkRadius = baseRadius * (0.8 + Math.sin(time * 3 + i) * 0.2);
+      const sparkX = entity.position.x + Math.cos(sparkAngle) * sparkRadius;
+      const sparkY = entity.position.y + Math.sin(sparkAngle) * sparkRadius;
+      const sparkSize = 2 + Math.sin(time * 4 + i) * 1;
+      
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize, 0, 2 * Math.PI);
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+    }
+    
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
           case 'orb': // Vortex - spinning plasma orb
             ctx.beginPath()
             ctx.arc(x, y, radius, 0, 2 * Math.PI)
@@ -771,21 +1082,6 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             }
             break
             
-          case 'spark': // Lightning Striker - electric spark
-            // Draw jagged lightning shape
-            ctx.beginPath()
-            ctx.moveTo(x - radius, y)
-            ctx.lineTo(x - radius/2, y - radius/2)
-            ctx.lineTo(x, y + radius/3)
-            ctx.lineTo(x + radius/2, y - radius/2)
-            ctx.lineTo(x + radius, y)
-            ctx.lineTo(x + radius/2, y + radius/2)
-            ctx.lineTo(x, y - radius/3)
-            ctx.lineTo(x - radius/2, y + radius/2)
-            ctx.closePath()
-            ctx.fill()
-            ctx.stroke()
-            break
             
           case 'cannon': // Guardian/Titan - heavy cannonball
             ctx.beginPath()
@@ -1255,24 +1551,104 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             break
             
           case 'wall': // Steel Guardian/Ice Knight - barrier projectile
-            // Draw rectangular barrier shape
-            ctx.beginPath()
-            ctx.rect(x - radius * 1.5, y - radius * 0.5, radius * 3, radius)
-            ctx.fill()
-            ctx.stroke()
-            
-            // Add reinforcement lines
-            ctx.strokeStyle = '#ffffff'
-            ctx.lineWidth = 1
-            ctx.globalAlpha = 0.7
-            for (let i = 0; i < 3; i++) {
-              const lineX = x - radius + (i * radius)
+            if (projectile.isIceWall || projectile.characterType === 'frost') {
+              // Draw ice wall for Ice Knight with proper orientation and size
+              const time = Date.now() * 0.005
+
+              // Convert world units to pixels using the known ratio between rendered radius and entity radius
+              const scaleFactor = projectile.radius && projectile.radius > 0 ? (radius / projectile.radius) : 1
+              const wallLength = (projectile as any).wallLength ? ((projectile as any).wallLength as number) * scaleFactor : radius * 3
+              const wallThickness = (projectile as any).wallThickness ? ((projectile as any).wallThickness as number) * scaleFactor : radius
+              const face = (projectile as any).facingDirection as { x: number, y: number } | undefined
+              const angle = face ? Math.atan2(face.y, face.x) : 0
+
+              ctx.save()
+              ctx.translate(x, y)
+              ctx.rotate(angle)
+
+              // Draw main ice wall structure centered at origin
               ctx.beginPath()
-              ctx.moveTo(lineX, y - radius * 0.5)
-              ctx.lineTo(lineX, y + radius * 0.5)
+              ctx.rect(-wallLength / 2, -wallThickness / 2, wallLength, wallThickness)
+              ctx.fillStyle = '#a5f3fc' // Light cyan for ice
+              ctx.fill()
+
+              // Add ice crystal border
+              ctx.strokeStyle = '#0891b2' // Darker cyan for border
+              ctx.lineWidth = 3
               ctx.stroke()
+
+              // Add ice crystal details
+              ctx.strokeStyle = '#e0f2fe' // Very light blue
+              ctx.lineWidth = 1
+              ctx.globalAlpha = 0.8
+
+              // Vertical ice crystal formations
+              for (let i = 0; i < 5; i++) {
+                const lineX = -wallLength / 2 + (i * wallLength / 4)
+                const heightVariation = Math.sin(time + i) * 0.2 + 0.8 // Varying heights
+
+                ctx.beginPath()
+                ctx.moveTo(lineX, -wallThickness * 0.5 * heightVariation)
+                ctx.lineTo(lineX, wallThickness * 0.5 * heightVariation)
+                ctx.stroke()
+
+                // Add crystal spikes at top and bottom
+                ctx.beginPath()
+                ctx.moveTo(lineX - 3, -wallThickness * 0.5 * heightVariation)
+                ctx.lineTo(lineX, -wallThickness * 0.5 * heightVariation - 5)
+                ctx.lineTo(lineX + 3, -wallThickness * 0.5 * heightVariation)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.moveTo(lineX - 3, wallThickness * 0.5 * heightVariation)
+                ctx.lineTo(lineX, wallThickness * 0.5 * heightVariation + 5)
+                ctx.lineTo(lineX + 3, wallThickness * 0.5 * heightVariation)
+                ctx.stroke()
+              }
+
+              // Add frost particle effect
+              ctx.fillStyle = '#e0f2fe' // Very light blue
+              ctx.globalAlpha = 0.6
+              for (let i = 0; i < 8; i++) {
+                const particleX = -wallLength / 2 + Math.random() * wallLength
+                const particleY = -wallThickness / 2 + Math.random() * wallThickness
+                const particleSize = 1 + Math.random() * 2
+
+                ctx.beginPath()
+                ctx.arc(particleX, particleY, particleSize, 0, 2 * Math.PI)
+                ctx.fill()
+              }
+
+              // Add cold aura effect
+              ctx.strokeStyle = '#0ea5e9' // Blue
+              ctx.lineWidth = 1
+              ctx.globalAlpha = 0.3 + Math.sin(time * 2) * 0.1
+              ctx.beginPath()
+              ctx.rect(-wallLength * 0.55, -wallThickness * 0.65, wallLength * 1.1, wallThickness * 1.3)
+              ctx.stroke()
+
+              ctx.globalAlpha = 1
+              ctx.restore()
+            } else {
+              // Draw rectangular barrier shape for other characters
+              ctx.beginPath()
+              ctx.rect(x - radius * 1.5, y - radius * 0.5, radius * 3, radius)
+              ctx.fill()
+              ctx.stroke()
+              
+              // Add reinforcement lines
+              ctx.strokeStyle = '#ffffff'
+              ctx.lineWidth = 1
+              ctx.globalAlpha = 0.7
+              for (let i = 0; i < 3; i++) {
+                const lineX = x - radius + (i * radius)
+                ctx.beginPath()
+                ctx.moveTo(lineX, y - radius * 0.5)
+                ctx.lineTo(lineX, y + radius * 0.5)
+                ctx.stroke()
+              }
+              ctx.globalAlpha = 1
             }
-            ctx.globalAlpha = 1
             break
             
           case 'sphere': // Plasma Vortex - energy sphere that becomes vortex
@@ -1612,13 +1988,43 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
         ctx.lineTo(trailEnd.x * scale, trailEnd.y * scale)
         
         // Character-specific trail effects
-        if (characterType === 'striker' && config.bulletStyle === 'electric') {
-          // Electric trail with crackling effect
-          ctx.strokeStyle = '#fbbf24'
-          ctx.lineWidth = Math.max(3, radius * 0.8)
-          ctx.shadowColor = '#fbbf24'
-          ctx.shadowBlur = 4 // Reduced from 10 to 4
-          ctx.globalAlpha = 0.8
+        if (characterType === 'striker') {
+          // Enhanced electric trail with crackling effect and multiple segments
+          ctx.strokeStyle = config.electricColor || '#fbbf24';
+          ctx.lineWidth = Math.max(3, radius * 1.2);
+          ctx.shadowColor = config.electricColor || '#fbbf24';
+          ctx.shadowBlur = 8;
+          ctx.globalAlpha = 0.9;
+          
+          // Add crackling effect to the trail
+          ctx.lineCap = 'round';
+          const crackleTime = Date.now() * 0.02;
+          const trailSegments = 3;
+          const segmentLength = trailLength / trailSegments;
+          
+          for (let i = 0; i < trailSegments; i++) {
+            const offset = Math.sin(crackleTime + i) * 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(trailEnd.x * scale + offset, trailEnd.y * scale + offset);
+            ctx.stroke();
+          }
+          
+          // Add electric sparks along the trail
+          if (config.electricParticles) {
+            for (let i = 0; i < 5; i++) {
+              const sparkX = x + (trailEnd.x * scale - x) * (i / 5) + (Math.random() - 0.5) * 10;
+              const sparkY = y + (trailEnd.y * scale - y) * (i / 5) + (Math.random() - 0.5) * 10;
+              const sparkSize = 1 + Math.random() * 2;
+              
+              ctx.beginPath();
+              ctx.arc(sparkX, sparkY, sparkSize, 0, 2 * Math.PI);
+              ctx.fillStyle = config.electricColor || '#fbbf24';
+              ctx.globalAlpha = 0.7;
+              ctx.fill();
+            }
+          }
+          ctx.globalAlpha = 0.9;
         } else if (characterType === 'vortex' && config.bulletStyle === 'spinning') {
           // Spiral trail
           ctx.strokeStyle = config.bulletColor

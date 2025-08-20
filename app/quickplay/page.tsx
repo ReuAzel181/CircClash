@@ -63,8 +63,8 @@ const characters = [
     name: 'Ice Knight', 
     icon: '❄️', 
     stats: { health: 270, attack: 33, defense: 85, speed: 42, range: 210 },
-    skill: 'Ice Wall',
-    description: 'Creates temporary ice barriers that block projectiles and slow nearby enemies'
+    skill: 'Frost Barrier',
+    description: 'Automatically summons Ice Walls every 5 seconds that block projectiles and allow phase-through while bouncing enemies'
   },
   { 
     id: 'shadow', 
@@ -340,8 +340,15 @@ export default function QuickPlayPage() {
   }
 
   const randomizeFighters = () => {
-    const shuffled = [...characters].sort(() => 0.5 - Math.random())
-    setSelectedFighters(shuffled.slice(0, 2)) // Only 2 fighters for Tekken-style duels
+    // Temporarily force Ice Knight selection for testing barriers
+    const iceKnight = characters.find(c => c.id === 'frost')
+    const fireWarrior = characters.find(c => c.id === 'flame')
+    if (iceKnight && fireWarrior) {
+      setSelectedFighters([iceKnight, fireWarrior])
+    } else {
+      const shuffled = [...characters].sort(() => 0.5 - Math.random())
+      setSelectedFighters(shuffled.slice(0, 2)) // Only 2 fighters for Tekken-style duels
+    }
   }
 
   const toggleFighter = (character: typeof characters[0]) => {
@@ -480,46 +487,60 @@ export default function QuickPlayPage() {
   }, [globalHealthMultiplier])
 
   return (
-  <div className="min-h-screen bg-gray-50 flex flex-col" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 10px) + 5rem)' }}>
+  <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden pb-24">
       {/* Game Area */}
-      <div className="flex-1 p-3 overflow-hidden">
+      <div className="flex-1 flex flex-col justify-between">
         <div className="h-full flex flex-col">
           {/* Fighter Selection */}
           {gameState === 'setup' && (
             <>
               <motion.div 
-                className="bg-white rounded-xl shadow-sm border p-4 mb-4"
+                className="bg-white rounded-xl shadow-sm border p-3 mb-3"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => router.push('/')} 
-                      className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm"
-                    >
-                      <Home className="w-4 h-4" />
-                      <span>Back to Home</span>
-                    </button>
-                    <div className="w-px h-5 bg-gray-300" />
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-primary-500" />
-                      Fighter Selection - Choose Your Warriors
-                    </h2>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={randomizeFighters}
-                      className="btn-secondary flex items-center gap-2 text-xs px-3 py-2"
-                    >
-                      <Shuffle className="w-3 h-3" />
-                      Random Match
-                    </button>
-                    <div className="relative">
+                {/* Tekken Style Character Selection */}
+                <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 rounded-none p-0 mb-16 relative overflow-hidden shadow-2xl min-h-[calc(100vh-200px)] w-full">
+                  {/* Tekken-style atmospheric background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-purple-900/60 to-red-900/40"></div>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(59,130,246,0.3),transparent_50%)]"></div>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(239,68,68,0.3),transparent_50%)]"></div>
+                  
+                  {/* Stage lighting effects */}
+                  <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-blue-400/60 via-transparent to-transparent blur-sm"></div>
+                  <div className="absolute top-0 right-1/4 w-1 h-full bg-gradient-to-b from-red-400/60 via-transparent to-transparent blur-sm"></div>
+                  
+                  {/* Top light beams */}
+                  <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-400/10 to-transparent"></div>
+                  
+                  {/* Header Controls - Tekken Style */}
+                  <div className="flex items-center justify-between p-4 relative z-10 bg-black/20 backdrop-blur-sm border-b border-blue-500/30">
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => router.push('/')} 
+                        className="flex items-center gap-2 text-blue-300 hover:text-white transition-all duration-300 text-sm group bg-black/40 px-3 py-2 rounded border border-blue-500/30"
+                      >
+                        <Home className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        <span>BACK</span>
+                      </button>
+                      <div className="w-px h-5 bg-blue-500/50"></div>
+                      <h2 className="text-sm font-bold text-blue-300 flex items-center gap-2 tracking-wider">
+                        <Users className="w-4 h-4" />
+                        CHARACTER SELECT
+                      </h2>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={randomizeFighters}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs px-4 py-2 rounded border border-blue-400/50 transition-all duration-300 flex items-center gap-2 shadow-lg transform hover:scale-105"
+                      >
+                        <Shuffle className="w-3 h-3" />
+                        RANDOM
+                      </button>
                       <select
                         value={arenaTheme}
                         onChange={(e) => setArenaTheme(e.target.value as any)}
-                        className="text-xs px-2 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:border-blue-500 focus:outline-none"
+                        className="text-xs px-3 py-2 border border-blue-500/50 rounded bg-black/40 text-blue-300 focus:border-blue-400 focus:outline-none transition-colors backdrop-blur-sm"
                       >
                         <option value="dark">🌙 Dark Arena</option>
                         <option value="light">☀️ Light Arena</option>
@@ -527,230 +548,254 @@ export default function QuickPlayPage() {
                         <option value="ocean">🌊 Ocean Arena</option>
                         <option value="forest">🌲 Forest Arena</option>
                       </select>
+                      <div className="text-xs text-blue-300 px-3 py-2 bg-black/40 rounded border border-blue-500/50 font-semibold backdrop-blur-sm">
+                        {selectedFighters.length}/2 READY
+                      </div>
                     </div>
-                    <span className="text-xs text-gray-600 px-2 py-2 bg-yellow-100 rounded-lg font-medium">
-                      {selectedFighters.length}/2 Ready for Battle
-                    </span>
-                  </div>
-                </div>
-
-                {/* Enhanced Character Selection - Tekken Style */}
-                <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-xl p-4 mb-3 relative border border-yellow-400/30 shadow-2xl">
-                  {/* Background texture effect */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/5 via-transparent to-red-400/5 rounded-xl"></div>
-                  <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-t-xl opacity-80"></div>
-                  
-                  <div className="text-center mb-4 relative z-10">
-                    <h3 className="text-2xl font-bold text-white mb-1 drop-shadow-lg gaming-title">CHOOSE YOUR FIGHTER</h3>
-                    <p className="text-yellow-300 text-base font-semibold">Select 2 warriors for the ultimate duel</p>
                   </div>
 
-                  {/* Selected Fighters Display - Enhanced Tekken Style */}
-                  <div className="flex justify-center items-center gap-6 mb-4 relative z-10">
-                    {/* Fighter 1 Slot */}
-                    <div className="relative group">
+                  {/* Main Layout - Tekken Style */}
+                  <div className="grid grid-cols-12 gap-0 relative z-10 min-h-[calc(100vh-320px)] w-full mb-12">
+                    {/* Bottom clamp to prevent content from touching the bottom */}
+                    <div style={{position: 'absolute', left: 0, right: 0, bottom: '50px', height: '500px', pointerEvents: 'none', zIndex: 20}}></div>
+
+                    {/* Player 1 Side - Left */}
+                    <div className="col-span-4 relative min-h-[420px]">
                       {selectedFighters[0] ? (
-                        <div className="bg-gradient-to-br from-red-600 via-red-700 to-red-900 rounded-xl p-4 w-64 h-72 flex flex-col border-4 border-yellow-400 shadow-2xl relative transform transition-all duration-300 hover:scale-105">
-                          {/* Animated border glow */}
-                          <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                          <div className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-900 rounded-lg h-full p-4">
-                            
-                            {/* Fighter indicator */}
-                            <div className="absolute top-3 left-3 bg-yellow-400 text-black rounded-full w-8 h-8 flex items-center justify-center font-black text-sm shadow-lg">
+                        <motion.div 
+                          className="relative h-full bg-gradient-to-br from-red-600/80 via-red-700/60 to-black/80 flex flex-col min-h-[580px]"
+                          initial={{ x: -300, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
+                        >
+                          {/* Character artwork background */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-red-900/60 via-red-800/40 to-transparent"></div>
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(239,68,68,0.4),transparent_70%)]"></div>
+                          
+                          {/* Player indicator */}
+                          <div className="absolute top-4 left-4 z-20">
+                            <div className="bg-red-500 text-white rounded-sm px-3 py-1 font-black text-sm shadow-lg border border-red-300">
                               P1
                             </div>
-                            
-                            {/* Character icon - compact */}
-                            <div className="text-center mb-3 pt-6">
-                              <div className="text-4xl mb-2 filter drop-shadow-lg">{selectedFighters[0].icon}</div>
-                              <div className="text-white font-bold text-lg mb-2 px-1">{selectedFighters[0].name}</div>
-                              <div className="text-yellow-300 font-semibold text-sm bg-black bg-opacity-50 rounded-full px-3 py-1 mx-1">
-                                {selectedFighters[0].skill}
+                          </div>
+                          
+                          {/* Character name and title - Tekken style */}
+                          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent z-20">
+                            <div className="mb-4">
+                              <h1 className="text-4xl font-black text-white mb-2 tracking-wider drop-shadow-2xl">
+                                {selectedFighters[0].name.split(' ').map(word => word.toUpperCase()).join(' ')}
+                              </h1>
+                              <div className="mb-4">
+                                <div className="text-red-400 font-bold text-sm mb-1 tracking-wide">FIGHTING STYLE</div>
+                                <div className="text-white font-semibold text-lg">{selectedFighters[0].skill}</div>
                               </div>
                             </div>
                             
-                            {/* Character Description - better spacing for readability */}
-                            <div className="flex-1 mb-3">
-                              <div className="text-xs text-gray-100 leading-relaxed bg-black bg-opacity-40 rounded-lg p-3 border border-yellow-400/30 h-24 overflow-hidden relative">
-                                <div className="line-clamp-4">
-                                  {selectedFighters[0].description}
-                                </div>
-                                {/* Fade effect for overflow */}
-                                <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                            {/* Character stats - Tekken info boxes */}
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-red-500/50">
+                                <div className="text-red-400 font-bold mb-1">NATIONALITY</div>
+                                <div className="text-white">Unknown</div>
                               </div>
-                            </div>
-                            
-                            {/* Stats Grid - Better spacing */}
-                            <div className="grid grid-cols-3 gap-2 text-xs">
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-blue-400/50 text-center">
-                                <div className="text-blue-300 font-bold text-xs">DEF</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[0].stats.defense}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-red-500/50">
+                                <div className="text-red-400 font-bold mb-1">FIGHTING</div>
+                                <div className="text-white">ATK {selectedFighters[0].stats.attack}</div>
                               </div>
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-green-400/50 text-center">
-                                <div className="text-green-300 font-bold text-xs">SPD</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[0].stats.speed}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-red-500/50">
+                                <div className="text-red-400 font-bold mb-1">HEIGHT</div>
+                                <div className="text-white">DEF {selectedFighters[0].stats.defense}</div>
                               </div>
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-purple-400/50 text-center">
-                                <div className="text-purple-300 font-bold text-xs">RNG</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[0].stats.range}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-red-500/50">
+                                <div className="text-red-400 font-bold mb-1">WEIGHT</div>
+                                <div className="text-white">SPD {selectedFighters[0].stats.speed}</div>
                               </div>
                             </div>
                           </div>
-                        </div>
+                          
+                          {/* Large character display */}
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                            <div className="text-8xl filter drop-shadow-2xl transform hover:scale-110 transition-transform duration-500">
+                              {selectedFighters[0].icon}
+                            </div>
+                          </div>
+                        </motion.div>
                       ) : (
-                        <div className="bg-gradient-to-br from-gray-700 to-gray-900 border-4 border-dashed border-gray-500 rounded-xl w-64 h-72 flex items-center justify-center relative group hover:border-yellow-400/50 transition-all duration-300">
-                          <div className="text-center text-gray-400 relative z-10">
-                            <div className="text-4xl mb-3 opacity-50">❓</div>
-                            <div className="font-bold text-base">FIGHTER 1</div>
-                            <div className="text-sm opacity-75">Select below</div>
-                            <div className="mt-3 text-sm bg-gray-600 rounded-full px-3 py-1 inline-block">Player 1</div>
+                        <div className="h-full bg-gradient-to-br from-gray-800/60 to-black/80 border-r border-blue-500/30 flex items-center justify-center relative min-h-[580px]">
+                          <div className="text-center text-gray-400">
+                            <div className="text-6xl mb-4 opacity-30">❓</div>
+                            <div className="font-bold text-xl mb-2 tracking-wider">PLAYER 1</div>
+                            <div className="text-sm opacity-75">Select Fighter</div>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Enhanced VS Section */}
-                    <div className="text-center relative flex flex-col items-center">
-                      <div className="text-4xl font-black text-yellow-400 mb-3 drop-shadow-2xl animate-pulse gaming-title">VS</div>
+                    {/* Center - Character Grid */}
+                    <div className="col-span-4 bg-black/40 backdrop-blur-sm border-x border-blue-500/30 flex flex-col min-h-[420px]">
                       
-                      {/* START BATTLE Button */}
-                      {selectedFighters.length === 2 && (
-                        <button
-                          onClick={handleStartGame}
-                          className="bg-gradient-to-r from-green-500 via-emerald-600 to-green-700 hover:from-green-600 hover:via-emerald-700 hover:to-green-800 text-white font-black py-3 px-6 rounded-xl text-lg transition-all duration-300 transform hover:scale-110 shadow-2xl border-4 border-yellow-400 flex items-center gap-2 group"
+                      {/* VS Display */}
+                      <div className="text-center py-6 border-b border-blue-500/30">
+                        <motion.div 
+                          className="text-5xl font-black text-white drop-shadow-2xl mb-2 tracking-widest"
+                          animate={{ 
+                            textShadow: [
+                              "0 0 20px rgba(59, 130, 246, 0.8)",
+                              "0 0 40px rgba(59, 130, 246, 1)",
+                              "0 0 20px rgba(59, 130, 246, 0.8)"
+                            ]
+                          }}
+                          transition={{ duration: 2, repeat: Infinity }}
                         >
-                          <Play className="w-5 h-5 group-hover:animate-pulse" />
-                          START BATTLE
-                        </button>
-                      )}
-                      
-                      {selectedFighters.length < 2 && (
-                        <div className="text-gray-400 text-base font-bold bg-gray-800 rounded-xl px-4 py-2 border-2 border-gray-600">
-                          Select 2 fighters to start
+                          VS
+                        </motion.div>
+                        <div className="text-blue-300 font-bold text-sm tracking-wider">CHARACTER SELECT</div>
+                      </div>
+
+                      {/* Character Selection Grid - Tekken style */}
+                      <div className="flex-1 p-4 overflow-y-auto min-h-0">
+                        <div className="grid grid-cols-4 gap-2">
+                          {characters.map((char, index) => {
+                            const isSelected = selectedFighters.find(f => f.id === char.id)
+                            return (
+                              <motion.button
+                                key={char.id}
+                                onClick={() => toggleFighter(char)}
+                                className={`relative group transition-all text-center p-2 h-20 flex flex-col justify-center border ${
+                                  isSelected
+                                    ? 'border-blue-400 bg-blue-500/30 shadow-lg shadow-blue-500/50' 
+                                    : 'border-gray-600 bg-black/30 hover:border-blue-300 hover:bg-blue-500/20'
+                                } backdrop-blur-sm`}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                              >
+                                {/* Selection glow */}
+                                {isSelected && (
+                                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-cyan-400 blur opacity-50"></div>
+                                )}
+                                
+                                <div className="relative">
+                                  {/* Character icon */}
+                                  <div className="text-2xl mb-1 transform group-hover:scale-110 transition-transform">
+                                    {char.icon}
+                                  </div>
+                                  
+                                  {/* Character name */}
+                                  <div className="text-xs font-bold text-white truncate">
+                                    {char.name.toUpperCase()}
+                                  </div>
+                                  
+                                  {/* Selection indicators */}
+                                  {isSelected && (
+                                    <>
+                                      <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-lg border border-blue-300">
+                                        ✓
+                                      </div>
+                                      <div className="absolute -top-1 -left-1 bg-gradient-to-r from-red-500 to-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-lg">
+                                        {selectedFighters.findIndex(f => f.id === char.id) + 1}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </motion.button>
+                            )
+                          })}
                         </div>
-                      )}
+                      </div>
+
+                      {/* Bottom Controls */}
+                      <div className="p-4 border-t border-blue-500/30 flex-shrink-0 mb-16">
+                        {selectedFighters.length === 2 ? (
+                          <motion.button
+                            onClick={handleStartGame}
+                            className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-red-600 hover:from-blue-500 hover:via-purple-500 hover:to-red-500 text-white font-black py-4 px-8 text-xl transition-all duration-300 shadow-2xl border border-blue-400/50 flex items-center justify-center gap-3"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Play className="w-6 h-6" />
+                            START BATTLE
+                          </motion.button>
+                        ) : (
+                          <div className="text-center text-gray-400 py-4">
+                            <div className="text-lg font-bold mb-1">SELECT FIGHTERS</div>
+                            <div className="text-sm">Choose your warriors to begin</div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Fighter 2 Slot */}
-                    <div className="relative group">
+                    {/* Player 2 Side - Right */}
+                    <div className="col-span-4 relative min-h-[420px]">
                       {selectedFighters[1] ? (
-                        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-xl p-4 w-64 h-72 flex flex-col border-4 border-yellow-400 shadow-2xl relative transform transition-all duration-300 hover:scale-105">
-                          {/* Animated border glow */}
-                          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                          <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 rounded-lg h-full p-4">
-                            
-                            {/* Fighter indicator */}
-                            <div className="absolute top-3 left-3 bg-cyan-400 text-black rounded-full w-8 h-8 flex items-center justify-center font-black text-sm shadow-lg">
+                        <motion.div 
+                          className="relative h-full bg-gradient-to-bl from-blue-600/80 via-blue-700/60 to-black/80 flex flex-col min-h-[580px]"
+                          initial={{ x: 300, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                        >
+                          {/* Character artwork background */}
+                          <div className="absolute inset-0 bg-gradient-to-l from-blue-900/60 via-blue-800/40 to-transparent"></div>
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.4),transparent_70%)]"></div>
+                          
+                          {/* Player indicator */}
+                          <div className="absolute top-4 right-4 z-20">
+                            <div className="bg-blue-500 text-white rounded-sm px-3 py-1 font-black text-sm shadow-lg border border-blue-300">
                               P2
                             </div>
-                            
-                            {/* Character icon - compact */}
-                            <div className="text-center mb-3 pt-6">
-                              <div className="text-4xl mb-2 filter drop-shadow-lg">{selectedFighters[1].icon}</div>
-                              <div className="text-white font-bold text-lg mb-2 px-1">{selectedFighters[1].name}</div>
-                              <div className="text-cyan-300 font-semibold text-sm bg-black bg-opacity-50 rounded-full px-3 py-1 mx-1">
-                                {selectedFighters[1].skill}
+                          </div>
+                          
+                          {/* Character name and title - Tekken style */}
+                          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent z-20">
+                            <div className="mb-4 text-right">
+                              <h1 className="text-4xl font-black text-white mb-2 tracking-wider drop-shadow-2xl">
+                                {selectedFighters[1].name.split(' ').map(word => word.toUpperCase()).join(' ')}
+                              </h1>
+                              <div className="mb-4">
+                                <div className="text-blue-400 font-bold text-sm mb-1 tracking-wide">FIGHTING STYLE</div>
+                                <div className="text-white font-semibold text-lg">{selectedFighters[1].skill}</div>
                               </div>
                             </div>
                             
-                            {/* Character Description - better spacing for readability */}
-                            <div className="flex-1 mb-3">
-                              <div className="text-xs text-gray-100 leading-relaxed bg-black bg-opacity-40 rounded-lg p-3 border border-cyan-400/30 h-24 overflow-hidden relative">
-                                <div className="line-clamp-4">
-                                  {selectedFighters[1].description}
-                                </div>
-                                {/* Fade effect for overflow */}
-                                <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                            {/* Character stats - Tekken info boxes */}
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-blue-500/50">
+                                <div className="text-blue-400 font-bold mb-1">NATIONALITY</div>
+                                <div className="text-white">Unknown</div>
                               </div>
-                            </div>
-                            
-                            {/* Stats Grid - Better spacing */}
-                            <div className="grid grid-cols-3 gap-2 text-xs">
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-blue-400/50 text-center">
-                                <div className="text-blue-300 font-bold text-xs">DEF</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[1].stats.defense}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-blue-500/50">
+                                <div className="text-blue-400 font-bold mb-1">FIGHTING</div>
+                                <div className="text-white">ATK {selectedFighters[1].stats.attack}</div>
                               </div>
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-green-400/50 text-center">
-                                <div className="text-green-300 font-bold text-xs">SPD</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[1].stats.speed}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-blue-500/50">
+                                <div className="text-blue-400 font-bold mb-1">HEIGHT</div>
+                                <div className="text-white">DEF {selectedFighters[1].stats.defense}</div>
                               </div>
-                              <div className="bg-black bg-opacity-70 rounded-lg px-2 py-2 border border-purple-400/50 text-center">
-                                <div className="text-purple-300 font-bold text-xs">RNG</div>
-                                <div className="text-white font-bold text-sm">{selectedFighters[1].stats.range}</div>
+                              <div className="bg-black/70 backdrop-blur-sm p-2 border border-blue-500/50">
+                                <div className="text-blue-400 font-bold mb-1">WEIGHT</div>
+                                <div className="text-white">SPD {selectedFighters[1].stats.speed}</div>
                               </div>
                             </div>
                           </div>
-                        </div>
+                          
+                          {/* Large character display */}
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                            <div className="text-8xl filter drop-shadow-2xl transform hover:scale-110 transition-transform duration-500">
+                              {selectedFighters[1].icon}
+                            </div>
+                          </div>
+                        </motion.div>
                       ) : (
-                        <div className="bg-gradient-to-br from-gray-700 to-gray-900 border-4 border-dashed border-gray-500 rounded-xl w-64 h-72 flex items-center justify-center relative group hover:border-yellow-400/50 transition-all duration-300">
-                          <div className="text-center text-gray-400 relative z-10">
-                            <div className="text-4xl mb-3 opacity-50">❓</div>
-                            <div className="font-bold text-base">FIGHTER 2</div>
-                            <div className="text-sm opacity-75">Select below</div>
-                            <div className="mt-3 text-sm bg-gray-600 rounded-full px-3 py-1 inline-block">Player 2</div>
+                        <div className="h-full bg-gradient-to-bl from-gray-800/60 to-black/80 border-l border-blue-500/30 flex items-center justify-center relative min-h-[580px]">
+                          <div className="text-center text-gray-400">
+                            <div className="text-6xl mb-4 opacity-30">❓</div>
+                            <div className="font-bold text-xl mb-2 tracking-wider">PLAYER 2</div>
+                            <div className="text-sm opacity-75">Select Fighter</div>
                           </div>
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-
-                {/* Character Grid - Clean and Minimalist */}
-                <div className="bg-gray-50 rounded-lg p-4 border">
-                  <h4 className="text-center text-gray-900 font-bold text-lg mb-4">
-                    Select Your Warriors
-                  </h4>
-                  
-                  <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 mb-3">
-                    {characters.map((char) => {
-                      const isSelected = selectedFighters.find(f => f.id === char.id)
-                      return (
-                        <button
-                          key={char.id}
-                          onClick={() => toggleFighter(char)}
-                          className={`relative group rounded-lg border-2 transition-all text-center p-2 ${
-                            isSelected
-                              ? 'border-yellow-500 bg-yellow-50 shadow-lg' 
-                              : 'border-gray-300 bg-white hover:border-yellow-300 hover:bg-yellow-50'
-                          }`}
-                        >
-                          <div className="relative">
-                            {/* Character icon */}
-                            <div className="text-lg mb-2">
-                              {char.icon}
-                            </div>
-                            
-                            {/* Character name with color indicator */}
-                            <div className="text-xs font-bold text-gray-800 mb-1 flex items-center justify-center gap-1">
-                              <div 
-                                className="w-2 h-2 rounded-full border border-gray-300"
-                                style={{ backgroundColor: characterColors[char.id] }}
-                              ></div>
-                              <span className="truncate text-xs">{char.name}</span>
-                            </div>
-                            
-                            {/* Special skill */}
-                            <div className="text-xs font-medium rounded px-1 py-0.5 truncate bg-blue-50 text-blue-700">
-                              {char.skill}
-                            </div>
-                            
-                            {/* Selection indicator */}
-                            {isSelected && (
-                              <div className="absolute top-1 right-1 bg-yellow-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                                ✓
-                              </div>
-                            )}
-                            
-                            {/* Fighter number indicator for selected characters */}
-                            {isSelected && (
-                              <div className="absolute top-1 left-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold">
-                                {selectedFighters.findIndex(f => f.id === char.id) + 1}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
                   </div>
                 </div>
               </motion.div>
@@ -890,7 +935,7 @@ export default function QuickPlayPage() {
                             <div className="text-2xl mb-2">⚔️</div>
                             <div className="text-gray-600 font-medium">Select 2 fighters to begin battle</div>
                             <div className="text-sm text-gray-500 mt-1">
-                              Choose your warriors from the character list above
+                              Choose your warriors from the character grid above
                             </div>
                           </div>
                         </div>

@@ -1,5 +1,10 @@
 // Character configuration for easy modification
 export interface CharacterConfig {
+  immobilizeElectricEffect?: boolean // Show electric effect while immobilized
+  electricVibe?: boolean // For electric visual effects
+  electricColor?: string // Color for electric effects
+  electricParticles?: boolean // Enable electric particles
+  immobilize?: boolean // If true, immobilizes on hit
   name: string
   color: string
   bulletColor: string
@@ -8,8 +13,27 @@ export interface CharacterConfig {
   bulletRadius: number
   firingRate: number // milliseconds between shots
   attackRange: number // maximum distance to attack
-  bulletStyle: 'normal' | 'spinning' | 'electric' | 'magical' | 'flame' | 'ice' | 'shadow' | 'heavy' | 'piercing' | 'slashing' | 'explosive' | 'boomerang' | 'barrier' | 'chain' | 'web' | 'mine' | 'clone' | 'shockwave' | 'tunnel' | 'rift' | 'earthquake' | 'fissure' | 'ironhand' | 'energywave' | 'vortex'
-  bulletShape: 'circle' | 'star' | 'diamond' | 'triangle' | 'spark' | 'shard' | 'orb' | 'cannon' | 'arrow' | 'arc' | 'beam' | 'bomb' | 'disc' | 'wall' | 'thread' | 'ironhand' | 'sphere'
+  dashSpeed?: number // Speed of dash attack
+  dashRange?: number // Range of dash attack
+  primaryAttack?: {
+    name: string
+    description: string
+    dashCooldown: number
+    minimumRange: number
+    showBlade: boolean
+    noBullets: boolean
+    pureCharge: boolean
+    swingDuration?: number // Duration of weapon swing animation
+    swingAngle?: number // Angle of weapon swing in degrees
+  }
+  bulletStyle: 'normal' | 'spinning' | 'electric' | 'magical' | 'flame' | 'ice' | 'shadow' | 'heavy' | 'piercing' | 'slashing' | 'explosive' | 'boomerang' | 'barrier' | 'chain' | 'web' | 'mine' | 'clone' | 'shockwave' | 'tunnel' | 'rift' | 'earthquake' | 'fissure' | 'ironhand' | 'energywave' | 'vortex' | 'spear' | 'thunder' | 'dash'
+  bulletShape: 'circle' | 'star' | 'diamond' | 'triangle' | 'spark' | 'shard' | 'orb' | 'cannon' | 'arrow' | 'arc' | 'beam' | 'bomb' | 'disc' | 'wall' | 'thread' | 'ironhand' | 'sphere' | 'spear' | 'thunder' | 'charge' | 'dome'
+  stunDuration?: number // ms, for stun abilities
+  electricField?: boolean // true if creates electric field
+  fieldRadius?: number // AoE radius for electric field
+  fieldDuration?: number // ms, duration of electric field
+  fieldDamage?: number // damage per tick in field
+  fieldTickRate?: number // ms, tick rate for field damage
   trailEffect: boolean
   glowEffect: boolean
   specialAbility: string
@@ -22,6 +46,14 @@ export interface CharacterConfig {
   explosiveRadius?: number // For explosive projectiles
   slowEffect?: boolean // For slowing projectiles (legacy boolean)
   barriers?: boolean // For barrier creation
+  barrierCooldown?: number // Cooldown between barrier spawns
+  barrierSize?: number // Size multiplier for barriers
+  barrierShape?: 'wall' | 'dome' // Shape of the barrier
+  phaseThrough?: boolean // Whether entities can phase through the barrier
+  bounceEffect?: boolean // Whether enemies bounce off barriers
+  reflectProjectiles?: boolean // Whether barriers reflect incoming projectiles
+  showWeaponNearEnemy?: boolean // Show weapon when near enemies
+  weaponVisibilityRange?: number // Range at which weapon becomes visible
   // Tank-specific properties
   tankHealth?: number // Higher health for tank characters
   damageReduction?: number // Percentage damage reduction (0-1)
@@ -128,21 +160,31 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
   },
   
   striker: {
-    name: 'Lightning Striker',
-    color: '#fbbf24', // Yellow
-    bulletColor: '#fbbf24',
-    damage: 10,
-    projectileSpeed: 700,
-    bulletRadius: 1.96, // Reduced by 30% (from 2.8)
-    firingRate: 250,
-    attackRange: 450,
-    bulletStyle: 'chain',
-    bulletShape: 'spark',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Chain Surge',
-    abilityDescription: 'Lightning that jumps between enemies in chain reactions',
-    chainLightning: true
+  name: 'Lightning Striker',
+  color: '#fbbf24', // Yellow
+  bulletColor: '#fbbf24',
+  damage: 42, // Updated for spear impact
+  projectileSpeed: 455, // 30% faster
+  bulletRadius: 3.5,
+  firingRate: 1080, // 10% faster
+  attackRange: 315, // As per guide
+  bulletStyle: 'thunder', // Strike thunder type shape
+  bulletShape: 'thunder',
+  trailEffect: true,
+  glowEffect: true,
+  electricVibe: true, // Custom visual flag
+  electricColor: '#e0e7ff', // Pale blue-white
+  electricParticles: true,
+  specialAbility: 'Chain Surge',
+  abilityDescription: 'Charges up and throws a lightning spear that creates an electric field on impact. The spear travels slowly but stuns the first enemy it hits for 0.5 seconds, and the electric field deals damage to nearby enemies.',
+  stunDuration: 500, // ms - reduced from 1000ms to 500ms
+  immobilize: true, // Ensure immobilization
+  immobilizeElectricEffect: true, // Show electric effect while immobilized
+  electricField: true,
+  fieldRadius: 80, // AoE radius
+  fieldDuration: 2000, // ms
+  fieldDamage: 18, // Damage per tick
+  fieldTickRate: 250 // ms
   },
   
   mystic: {
@@ -188,19 +230,40 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     name: 'Ice Knight',
     color: '#06b6d4', // Cyan
     bulletColor: '#06b6d4',
-    damage: 12,
-    projectileSpeed: 250,
-    bulletRadius: 3.43, // Reduced by 30% (from 4.9)
-    firingRate: 450,
-    attackRange: 300,
-    bulletStyle: 'barrier',
-    bulletShape: 'wall',
-    trailEffect: false,
+    damage: 45, // Increased for dash attack
+    projectileSpeed: 500, // Base projectile speed
+    dashSpeed: 600, // Speed of dash
+    dashRange: 250, // Range of dash
+    attackRange: 200, // Detection range for dash - reduced to make circle smaller
+    bulletRadius: 6.0, // Increased for larger barriers
+    firingRate: 800, // Adjusted for dash timing
+    bulletStyle: 'dash',
+    bulletShape: 'charge',
+    trailEffect: true,
     glowEffect: true,
-    specialAbility: 'Ice Wall',
-    abilityDescription: 'Creates temporary ice barriers that block projectiles and slow nearby enemies',
+    specialAbility: 'Frost Barrier',
+    abilityDescription: 'Every 5 seconds, automatically summons a protective ice wall that lasts for 2 seconds. Creates a solid wall that blocks enemies and destroys incoming projectiles',
     barriers: true,
-    slowEffect: true
+    barrierDuration: 3000, // 3 seconds
+    barrierCooldown: 5000, // 5 seconds as per CHARACTER_GUIDE.md
+    barrierSize: 2.0, // 2.0x larger barriers for wall shape
+    barrierShape: 'wall', // Wall-shaped barrier as per CHARACTER_GUIDE.md
+    phaseThrough: false, // Solid barrier that blocks everything
+    bounceEffect: false, // Do not bounce enemies
+    reflectProjectiles: false, // Do not reflect; destroy on hit
+    primaryAttack: {
+      name: 'Ice Charge',
+      description: 'Dashes toward nearby enemies with blade drawn, dealing damage on impact with a powerful swing',
+      dashCooldown: 800, // 0.8 seconds between dashes
+      minimumRange: 50, // Minimum range to trigger dash
+      showBlade: true, // Show blade during dash
+      noBullets: true, // Disable regular shooting
+      pureCharge: true, // Only dash damage applies
+      swingDuration: 400, // Duration of weapon swing animation in ms
+      swingAngle: 120 // Angle of weapon swing in degrees
+    },
+    showWeaponNearEnemy: false, // Only show weapon when attacking/ramming
+    weaponVisibilityRange: 400 // Show weapon within 400 units of enemies - increased for better visibility
   },
   
   shadow: {

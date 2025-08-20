@@ -115,9 +115,9 @@
 - **Range:** 315 units
 
 ### Special Ability: Chain Surge
-**Description:** Lightning jumps between 2-3 enemies for burst AoE damage  
-**Bullet Style:** Electric chains with jumping lightning effects  
-**Tactical Role:** Fast in-and-out assassin who punishes grouped enemies
+**Description:** Charges up and throws a lightning spear that creates an electric field on impact. The spear travels slowly but stuns the first enemy it hits for 0.5 seconds, and the electric field deals damage to nearby enemies.
+**Bullet Style:** Spear-shaped electric projectile with trailing lightning effects; creates a crackling electric field on hit.
+**Tactical Role:** Precision striker who controls space with stun and area denial, rewarding careful aim and timing.
 
 ### Strengths
 - Chain lightning provides excellent AoE burst damage
@@ -218,37 +218,32 @@
 - **Speed:** 42 SPD
 - **Range:** 210 units
 
-### Special Ability: Ice Wall
-**Description:** Creates temporary ice barriers that block projectiles and slow nearby enemies  
-**Bullet Style:** Ice barrier projectiles that create defensive walls  
-**Tactical Role:** Defensive tank with battlefield control
+### Passive Ability: Frost Barrier
+**Description:** Every 5 seconds, automatically summons an Ice Wall at the Ice Knight's position that lasts for 3 seconds. Enemies collide and bounce off the wall while Ice Knight can pass through freely. Walls can interrupt enemy dashes and block projectiles, providing tactical cover.  
+**Bullet Style:** Automatic ice barrier formation with collision and defensive properties  
+**Tactical Role:** Mobile defensive tank with unique positioning advantage
+
+### Primary Attack: Glacial Blade
+**Description:** Wields a frost-imbued sword for close-range combat, performing melee swings in an arc that slow enemies briefly and deal moderate damage.  
+**Attack Style:** Short-range melee arc with slowing ice effects  
+**Combat Role:** Close-quarters duelist with crowd control potential
 
 ### Strengths
-- Ice walls provide excellent team protection
-- Can control battlefield layout with barrier placement
-- High defense and health for sustained combat
-- Barriers can funnel enemy movement into advantageous positions
-- Slowing effects support team coordination
+- Automatic barrier generation provides consistent defense
+- Can move through own ice walls for superior positioning
+- Melee combat excels in close-range encounters
+- Slowing effects from blade attacks control enemy movement
+- Barriers provide team protection and zone control
+- Unique mobility through wall phasing
+- Strong dueling potential with melee focus
 
 ### Weaknesses
-- Slow movement makes positioning critical
-- Lower damage output compared to DPS classes
-- Ice walls can sometimes block friendly fire
-- Requires strategic thinking to place barriers effectively
-**Bullet Style:** Crystalline ice shards with freezing effects  
-**Tactical Role:** Area control and crowd control specialist
-
-### Strengths
-- High defense and health make it very durable
-- Ice projectiles can slow or freeze enemies
-- Large projectiles are easier to hit with
-- Excellent for controlling enemy movement
-
-### Weaknesses
-- Very slow movement speed
-- Short range limits engagement options
-- Slow projectiles are easy to dodge
-- Low damage output requires sustained combat
+- Requires close range for effective damage output
+- Barriers have short duration requiring timing
+- Vulnerable between barrier spawns
+- Melee focus exposes to ranged attacks
+- Must manage positioning for optimal barrier placement
+- Slower movement makes closing distance challenging
 
 ---
 
