@@ -895,7 +895,24 @@ function stunTarget(targetId: string, duration: number) {
 }
 export { stunTarget };
 
+// Import the character system utilities
+import { fireCharacterAttack } from './characters/gameUtils';
+
 function fireCharacterSpecificAttack(botId: string, direction: Vector, characterType: string): void {
+  if (!currentGame) return;
+  
+  try {
+    // Use the new character system
+    fireCharacterAttack(botId, direction, currentGame.world);
+  } catch (error) {
+    console.error(`Error in character attack system:`, error);
+    // Fallback to old implementation if needed
+    fallbackFireCharacterAttack(botId, direction, characterType);
+  }
+}
+
+// Fallback implementation for backward compatibility
+function fallbackFireCharacterAttack(botId: string, direction: Vector, characterType: string): void {
   const config = getCharacterConfig(characterType)
   const bot = currentGame?.world.entities.get(botId)
   if (!bot || !currentGame) return
@@ -965,13 +982,13 @@ function fireCharacterSpecificAttack(botId: string, direction: Vector, character
       }
       break
       
-    case 'flame': // Fire Warrior - 5 shot burst
+    case 'flame': // Fire Warrior - 3 shot burst
       for (let i = 0; i < 3; i++) {
         const timeout = setTimeout(() => {
           // Check if bot still exists before firing
           if (!currentGame?.world.entities.has(botId)) return
           
-          const angle = (i - 2) * 0.2 // Fan pattern
+          const angle = (i - 1) * 0.2 // Fan pattern
           const spreadDir = {
             x: normalizedDir.x * Math.cos(angle) - normalizedDir.y * Math.sin(angle),
             y: normalizedDir.x * Math.sin(angle) + normalizedDir.y * Math.cos(angle)

@@ -1,5 +1,9 @@
 // Character configuration for easy modification
 export interface CharacterConfig {
+  // Flame-specific properties
+  burnDuration?: number // Duration of burn effect in ms
+  burnTickRate?: number // Rate at which burn damage is applied in ms
+  burnDamagePerTick?: number // Damage per tick for burn effect
   immobilizeElectricEffect?: boolean // Show electric effect while immobilized
   electricVibe?: boolean // For electric visual effects
   electricColor?: string // Color for electric effects

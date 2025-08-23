@@ -1,6 +1,7 @@
 // Core physics types and functions for deterministic circle-based gameplay
 import { stunTarget } from './game';
 import { getCharacterConfig } from './characterConfig';
+import { handleCollision } from './characters/physicsUtils';
 
 export interface Vector {
   x: number
@@ -412,6 +413,14 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
   if (entityA.type === 'projectile' || entityB.type === 'projectile') {
     const projectile = entityA.type === 'projectile' ? entityA as Projectile : entityB as Projectile
     const target = entityA.type === 'projectile' ? entityB : entityA
+    
+    try {
+      // Use the new character system for collision handling
+      handleCollision(projectile, target, world);
+    } catch (error) {
+      console.error('Error in character collision system:', error);
+      // Continue with fallback collision handling
+    }
     
     // Special handling for formed vortexes - allow players to pass through
     const projectileSpecial = projectile as any
@@ -1638,7 +1647,7 @@ function createWeaponProjectile(owner: CircleEntity, weaponData: any, direction:
   const spawnOffset = Vector.multiply(normalizedDir, owner.radius + weaponData.radius + 2)
   
   return {
-    id: `projectile_${currentTime}_${Math.random()}`,
+    id: `projectile_${currentTime}_${Math.random().toString(36).substring(2, 9)}`,
     type: 'projectile',
     weaponId: weaponData.id,
     ownerId: owner.id,
@@ -1666,7 +1675,7 @@ function createWeaponProjectile(owner: CircleEntity, weaponData: any, direction:
 
 function createWeaponAura(owner: CircleEntity, weaponData: any, currentTime: number): WeaponAura {
   return {
-    id: `aura_${currentTime}_${Math.random()}`,
+    id: `aura_${currentTime}_${Math.random().toString(36).substring(2, 9)}`,
     type: 'aura',
     weaponId: weaponData.id,
     ownerId: owner.id,
