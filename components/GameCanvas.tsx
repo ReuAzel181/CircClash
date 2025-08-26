@@ -10,7 +10,7 @@ import {
   GameState
 } from '../lib/game'
 import { CircleEntity, Vector } from '../lib/physics'
-import { getCharacterConfig, getCharacterType } from '../lib/characterConfig'
+import { getCharacterConfigSync, getCharacterType } from '../lib/characterConfig'
 
 // Theme configuration
 const getThemeColors = (theme: 'dark' | 'light' | 'sunset' | 'ocean' | 'forest') => {
@@ -392,7 +392,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
   // Draw weapon if visible
   if (((entity as any).showWeapon === true) && ((entity as any).weaponState?.visible === true)) {
     const characterType = getCharacterType(entity.id)
-    const config = getCharacterConfig(characterType)
+    const config = getCharacterConfigSync(characterType)
     
     ctx.save()
     ctx.translate(x, y)
@@ -432,7 +432,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       } else if ((entity as any).isBot) {
         // Character-specific colors for bots (same as their bullets)
         const characterType = getCharacterType(entity.id)
-        const config = getCharacterConfig(characterType)
+        const config = getCharacterConfigSync(characterType)
         ctx.fillStyle = config.color
       } else {
         ctx.fillStyle = '#10b981' // green-500
@@ -798,7 +798,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       // Get character-specific bullet styling
       const projectile = entity as any
       const characterType = projectile.characterType || 'default'
-      const config = getCharacterConfig(characterType)
+      const config = getCharacterConfigSync(characterType)
       
       ctx.save()
       
@@ -945,7 +945,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
     
     // Get character-specific config for electric effects
     const characterType = getCharacterType(entity.id);
-    const config = getCharacterConfig(characterType);
+    const config = getCharacterConfigSync(characterType);
     const electricColor = config.electricColor || '#4f46e5';
     
     // Draw multiple pulsing circles for enhanced electric effect

@@ -1,7 +1,6 @@
 // Core physics types and functions for deterministic circle-based gameplay
-import { stunTarget } from './game';
 import { getCharacterConfigSync } from './characterConfig';
-import { handleCollision } from './characters/characterUtils';
+import { handleCollision, stunTarget } from './characters/characterUtils';
 
 export interface Vector {
   x: number
@@ -617,7 +616,7 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
       if ((projectile as any).style === 'spear') {
         // Get the character config for the striker to use the correct stun duration
         const strikerConfig = getCharacterConfigSync('striker')
-        stunTarget(target.id, strikerConfig.stunDuration || 500) // Use config duration or fallback to 0.5 seconds
+        stunTarget(target.id, strikerConfig.stunDuration || 500, world) // Use config duration or fallback to 0.5 seconds
       }
       // Check for combo invulnerability (Iron Titan during grab combo)
       const currentTime = Date.now()
