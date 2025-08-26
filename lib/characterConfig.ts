@@ -1,5 +1,16 @@
 // Character configuration for easy modification
-export interface CharacterConfig {
+// Base projectile configuration that all characters share
+export interface BaseProjectileConfig {
+  projectileLifetime: number; // Duration before projectile disappears
+  piercing: number; // Number of enemies projectile can pierce
+  trailOpacity: number; // Opacity of projectile trail effect
+  trailLifetime: number; // Duration of trail effect
+  multiShot: number; // Number of projectiles to fire at once
+  spreadAngle: number; // Angle between multiple projectiles
+  homingStrength: number; // Strength of homing behavior
+}
+
+export interface CharacterConfig extends BaseProjectileConfig {
   // Flame-specific properties
   burnDuration?: number // Duration of burn effect in ms
   burnTickRate?: number // Rate at which burn damage is applied in ms
@@ -42,11 +53,11 @@ export interface CharacterConfig {
   glowEffect: boolean
   specialAbility: string
   abilityDescription: string
-  multiShot?: number // For characters that fire multiple projectiles
-  spreadAngle?: number // For spread shots
+  multiShot: number // For characters that fire multiple projectiles
+  spreadAngle: number // For spread shots
   boomerangReturn?: boolean // For boomerang projectiles
   chainLightning?: boolean // For chain effects
-  homingStrength?: number // For homing projectiles
+  homingStrength: number // For homing projectiles
   explosiveRadius?: number // For explosive projectiles
   slowEffect?: boolean // For slowing projectiles (legacy boolean)
   barriers?: boolean // For barrier creation
@@ -103,219 +114,17 @@ export interface CharacterConfig {
   rapidFireDelay?: number // Delay between rapid fire shots in ms
 }
 
+// Configurations for characters that haven't been refactored to individual implementations yet
 export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
-  vortex: {
-    name: 'Plasma Vortex',
-    color: '#8b5cf6', // Purple
-    bulletColor: '#8b5cf6',
-    damage: 15,
-    projectileSpeed: 400,
-    bulletRadius: 3.5,
-    firingRate: 800,
-    attackRange: 500,
-    bulletStyle: 'vortex',
-    bulletShape: 'sphere',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Plasma Vortex',
-    abilityDescription: 'Fires an energy bullet that stops and becomes a swirling vortex, pulling enemies inward',
-    vortexStopDistance: 250, // How far the bullet travels before stopping
-    vortexRadius: 60, // Area of effect when vortex forms
-    vortexPullStrength: 1.2, // Force pulling enemies toward center (increased)
-    vortexDuration: 3000, // Always 3 seconds regardless of what it hits
-    vortexTouchedDuration: 3000, // Same duration whether touched or not
-    vortexDamageRate: 12, // Damage per second while in vortex
-    stacksToTrigger: 5, // Trigger rapid fire after 5 enemy hits (reduced from 7)
-    rapidFireCount: 3, // Fire 3 consecutive shots
-    rapidFireDelay: 150, // 150ms between rapid fire shots
-    multiShot: 1
-  },
-  
-  guardian: {
-    name: 'Steel Guardian',
-    color: '#6b7280', // Gray
-    bulletColor: '#6b7280',
-    damage: 45, // Higher damage for energy wave
-    projectileSpeed: 250, // Slower growing wave
-    bulletRadius: 20, // Increased starting size of energy wave (was 15)
-    firingRate: 1500, // Reduced cooldown including faster charge time (was 2000)
-    attackRange: 400, // Increased wave travel distance (was 300)
-    bulletStyle: 'energywave',
-    bulletShape: 'circle',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Energy Wave Surge',
-    abilityDescription: 'Charges metallic energy then unleashes a massive growing wave that damages and slows all enemies it passes through.',
-    explosiveRadius: 0, // No explosion, just growing wave
-    multiShot: 1, // Single energy wave
-    spreadAngle: 0, // No spread
-    // Tank-specific properties
-    tankHealth: 450, // Much higher health than others (vs normal ~260)
-    damageReduction: 0.25, // 25% damage reduction
-    knockbackResistance: 0.8, // 80% resistance to knockback
-    selfHeal: 2, // Regenerates 2 HP per second
-    // Energy wave specific properties
-    chargeTime: 1000, // Faster charge-up period (was 1500)
-    waveGrowthRate: 1.8, // Increased wave growth rate (was 1.5)
-    damageOverTime: 15, // 15 damage per tick
-    dotDuration: 3000, // 3 seconds of DOT
-    slowEffectStrength: 0.4, // 40% movement speed reduction
-    slowDuration: 4000 // 4 seconds of slow effect
-  },
-  
-  striker: {
-  name: 'Lightning Striker',
-  color: '#fbbf24', // Yellow
-  bulletColor: '#fbbf24',
-  damage: 42, // Updated for spear impact
-  projectileSpeed: 455, // 30% faster
-  bulletRadius: 3.5,
-  firingRate: 1080, // 10% faster
-  attackRange: 315, // As per guide
-  bulletStyle: 'thunder', // Strike thunder type shape
-  bulletShape: 'thunder',
-  trailEffect: true,
-  glowEffect: true,
-  electricVibe: true, // Custom visual flag
-  electricColor: '#e0e7ff', // Pale blue-white
-  electricParticles: true,
-  specialAbility: 'Chain Surge',
-  abilityDescription: 'Charges up and throws a lightning spear that creates an electric field on impact. The spear travels slowly but stuns the first enemy it hits for 0.5 seconds, and the electric field deals damage to nearby enemies.',
-  stunDuration: 500, // ms - reduced from 1000ms to 500ms
-  immobilize: true, // Ensure immobilization
-  immobilizeElectricEffect: true, // Show electric effect while immobilized
-  electricField: true,
-  fieldRadius: 80, // AoE radius
-  fieldDuration: 2000, // ms
-  fieldDamage: 18, // Damage per tick
-  fieldTickRate: 250 // ms
-  },
-  
-  mystic: {
-    name: 'Mystic Orb',
-    color: '#ec4899', // Pink
-    bulletColor: '#ec4899',
-    damage: 11,
-    projectileSpeed: 450,
-    bulletRadius: 2.45, // Reduced by 30% (from 3.5)
-    firingRate: 350,
-    attackRange: 400,
-    bulletStyle: 'web',
-    bulletShape: 'thread',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Mystic Web',
-    abilityDescription: 'Fires magical threads that tether and slightly slow enemies on hit',
-    slowEffect: true,
-    homingStrength: 0.3
-  },
-  
-  flame: {
-    name: 'Fire Warrior',
-    color: '#dc2626', // Red
-    bulletColor: '#dc2626',
-    damage: 12, // Reduced from original 13, but higher than 10
-    projectileSpeed: 380, // Reduced from 400, but higher than 350
-    bulletRadius: 2.8, // Reduced from original, but higher than 2.5
-    firingRate: 650, // Increased from 600, but less than 800 (moderate delay)
-    attackRange: 330, // Reduced from 350, but higher than 320
-    bulletStyle: 'flame',
-    bulletShape: 'circle',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Flame Burst',
-    abilityDescription: 'Fires explosive projectiles that leave fire trails and area damage on impact',
-    explosiveRadius: 28, // Reduced from 30, but higher than 25
-    multiShot: 2, // Back to 2 shots from 1
-    spreadAngle: 12 // Reduced from 15, but allows dual shots
-  },
-  
-  frost: {
-    name: 'Ice Knight',
-    color: '#06b6d4', // Cyan
-    bulletColor: '#06b6d4',
-    damage: 45, // Increased for dash attack
-    projectileSpeed: 500, // Base projectile speed
-    dashSpeed: 600, // Speed of dash
-    dashRange: 250, // Range of dash
-    attackRange: 200, // Detection range for dash - reduced to make circle smaller
-    bulletRadius: 6.0, // Increased for larger barriers
-    firingRate: 800, // Adjusted for dash timing
-    bulletStyle: 'dash',
-    bulletShape: 'charge',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Frost Barrier',
-    abilityDescription: 'Every 5 seconds, automatically summons a protective ice wall that lasts for 2 seconds. Creates a solid wall that blocks enemies and destroys incoming projectiles',
-    barriers: true,
-    barrierDuration: 3000, // 3 seconds
-    barrierCooldown: 5000, // 5 seconds as per CHARACTER_GUIDE.md
-    barrierSize: 2.0, // 2.0x larger barriers for wall shape
-    barrierShape: 'wall', // Wall-shaped barrier as per CHARACTER_GUIDE.md
-    phaseThrough: false, // Solid barrier that blocks everything
-    bounceEffect: false, // Do not bounce enemies
-    reflectProjectiles: false, // Do not reflect; destroy on hit
-    primaryAttack: {
-      name: 'Ice Charge',
-      description: 'Dashes toward nearby enemies with blade drawn, dealing damage on impact with a powerful swing',
-      dashCooldown: 800, // 0.8 seconds between dashes
-      minimumRange: 50, // Minimum range to trigger dash
-      showBlade: true, // Show blade during dash
-      noBullets: true, // Disable regular shooting
-      pureCharge: true, // Only dash damage applies
-      swingDuration: 400, // Duration of weapon swing animation in ms
-      swingAngle: 120 // Angle of weapon swing in degrees
-    },
-    showWeaponNearEnemy: false, // Only show weapon when attacking/ramming
-    weaponVisibilityRange: 400 // Show weapon within 400 units of enemies - increased for better visibility
-  },
-  
-  shadow: {
-    name: 'Shadow Assassin',
-    color: '#374151', // Dark Gray
-    bulletColor: '#374151',
-    damage: 9,
-    projectileSpeed: 600,
-    bulletRadius: 1.47, // Reduced by 30% (from 2.1)
-    firingRate: 200,
-    attackRange: 500,
-    bulletStyle: 'clone',
-    bulletShape: 'diamond',
-    trailEffect: true,
-    glowEffect: false,
-    specialAbility: 'Shadow Clone',
-    abilityDescription: 'Creates brief shadow duplicates that confuse enemies and provide distraction',
-    multiShot: 2, // Reduced from 3 to 2
-    spreadAngle: 10 // Reduced from 15 to 10
-  },
-  
-  titan: {
-    name: 'Iron Titan',
-    color: '#059669', // Green
-    bulletColor: '#059669',
-    damage: 40, // 8 damage x 5 punches = 40 total damage
-    projectileSpeed: 600, // Speed of hand extension
-    bulletRadius: 12, // Size of iron hand
-    firingRate: 1200, // Increased from 900 to 1200 (slower attacks)
-    attackRange: 280, // Reduced from 400 to 280
-    bulletStyle: 'ironhand',
-    bulletShape: 'ironhand',
-    trailEffect: true,
-    glowEffect: true,
-    specialAbility: 'Grab and Punch Combo',
-    abilityDescription: 'Extends an iron hand that grabs the target and delivers 5 rapid punches before releasing with knockback',
-    explosiveRadius: 35, // Impact zone of the hand
-    multiShot: 1, // Single hand strike
-    spreadAngle: 0,
-    // Iron hand-specific properties
-    handExtensionSpeed: 600, // Speed going out
-    handRetractionSpeed: 400, // Speed coming back
-    maxExtension: 280, // Maximum reach
-    handDamage: 8, // Damage per punch (5 punches total)
-    knockbackForce: 200 // Increased knockback strength
-  },
   
   archer: {
+    projectileLifetime: 2000,
+    piercing: 0,
+    trailOpacity: 0.6,
+    trailLifetime: 400,
+    multiShot: 1,
+    spreadAngle: 0,
+    homingStrength: 0.2,
     name: 'Wind Archer',
     color: '#10b981', // Emerald Green
     bulletColor: '#10b981',
@@ -329,11 +138,17 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     trailEffect: true,
     glowEffect: true,
     specialAbility: 'Wind Tunnel',
-    abilityDescription: 'Creates gusting wind corridors that redirect and accelerate projectiles',
-    homingStrength: 0.2
+    abilityDescription: 'Creates gusting wind corridors that redirect and accelerate projectiles'
   },
   
   samurai: {
+    projectileLifetime: 1500,
+    piercing: 1,
+    trailOpacity: 0.7,
+    trailLifetime: 500,
+    multiShot: 1,
+    spreadAngle: 0,
+    homingStrength: 0,
     name: 'Blade Master',
     color: '#7c3aed', // Violet
     bulletColor: '#7c3aed',
@@ -353,6 +168,13 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
   },
   
   sniper: {
+    projectileLifetime: 2500,
+    piercing: 1,
+    trailOpacity: 0.8,
+    trailLifetime: 700,
+    multiShot: 1,
+    spreadAngle: 0,
+    homingStrength: 0,
     name: 'Void Sniper',
     color: '#0f172a', // Dark Slate
     bulletColor: '#0f172a',
@@ -366,12 +188,17 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     trailEffect: true,
     glowEffect: true,
     specialAbility: 'Void Rifts',
-    abilityDescription: 'Opens dimensional rifts that allow attacks from unexpected angles',
-    multiShot: 1, // Reduced from 2 to 1 for more precise sniping
-    spreadAngle: 0 // No spread for precision
+    abilityDescription: 'Opens dimensional rifts that allow attacks from unexpected angles'
   },
   
   bomber: {
+    projectileLifetime: 3000,
+    piercing: 0,
+    trailOpacity: 0.5,
+    trailLifetime: 600,
+    multiShot: 1,
+    spreadAngle: 0,
+    homingStrength: 0,
     name: 'Chaos Bomber',
     color: '#f97316', // Orange Red
     bulletColor: '#f97316',
@@ -392,22 +219,49 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
 
 // Helper function to get character type from ID
 export function getCharacterType(entityId: string): string {
-  if (entityId.includes('vortex')) return 'vortex'
-  if (entityId.includes('guardian')) return 'guardian'
-  if (entityId.includes('striker')) return 'striker'
-  if (entityId.includes('mystic')) return 'mystic'
-  if (entityId.includes('flame')) return 'flame'
-  if (entityId.includes('frost')) return 'frost'
-  if (entityId.includes('shadow')) return 'shadow'
-  if (entityId.includes('titan')) return 'titan'
-  if (entityId.includes('archer')) return 'archer'
-  if (entityId.includes('samurai')) return 'samurai'
-  if (entityId.includes('sniper')) return 'sniper'
-  if (entityId.includes('bomber')) return 'bomber'
-  return 'default'
+  // Remove 'bot_' prefix if it exists
+  const id = entityId.replace('bot_', '')
+  
+  if (id === 'vortex') return 'vortex'
+  if (id === 'guardian') return 'guardian'
+  if (id === 'striker') return 'striker'
+  if (id === 'mystic') return 'mystic'
+  if (id === 'flame') return 'flame'
+  if (id === 'frost') return 'frost'
+  if (id === 'shadow') return 'shadow'
+  if (id === 'titan') return 'titan'
+  if (id === 'archer') return 'archer'
+  if (id === 'samurai') return 'samurai'
+  if (id === 'sniper') return 'sniper'
+  if (id === 'bomber') return 'bomber'
+  
+  // Return default character type if no match is found
+  return 'vortex'
 }
 
 // Helper function to get character config
-export function getCharacterConfig(characterType: string): CharacterConfig {
-  return CHARACTER_CONFIGS[characterType] || CHARACTER_CONFIGS.striker // Default fallback
+export async function getCharacterConfig(characterType: string): Promise<CharacterConfig> {
+  // First check if it's a refactored character with individual implementation
+  const refactoredCharacters = ['vortex', 'guardian', 'striker', 'mystic', 'flame', 'frost', 'shadow', 'titan', 'blade', 'chaos', 'void'];
+  
+  if (refactoredCharacters.includes(characterType)) {
+    try {
+      // Try to import the character's config from its individual implementation
+      const characterModule = await import(`./characters/${characterType}`);
+      const configName = `${characterType}Config`;
+      if (characterModule[configName]) {
+        return characterModule[configName];
+      }
+    } catch (error) {
+      console.warn(`Failed to load individual config for ${characterType}, falling back to legacy config:`, error);
+    }
+  }
+  
+  // Fall back to legacy CHARACTER_CONFIGS for non-refactored characters
+  return CHARACTER_CONFIGS[characterType] || CHARACTER_CONFIGS.archer; // Default fallback
+}
+
+// Synchronous version for backward compatibility
+export function getCharacterConfigSync(characterType: string): CharacterConfig {
+  return CHARACTER_CONFIGS[characterType] || CHARACTER_CONFIGS.archer; // Default fallback
 }

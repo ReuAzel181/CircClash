@@ -1,62 +1,117 @@
-// Character factory for loading and managing character implementations
+// Character factory implementation
 import { CharacterImplementation } from './characterInterface';
-import defaultCharacter from './defaultCharacter';
-import vortexCharacter from './vortex';
-import flameCharacter from './flame';
-import archerCharacter from './archer';
-
-// Cache for character implementations
-const characterImplementations: Record<string, CharacterImplementation> = {
-  // Pre-load known character implementations
-  'vortex': vortexCharacter,
-  'flame': flameCharacter,
-  'archer': archerCharacter,
-  'default': defaultCharacter
-};
+import { CharacterConfig } from '../characterConfig';
 
 /**
- * Get character implementation for a specific character type
- * @param characterType The character type to get implementation for
- * @returns The character implementation
+ * Character factory class for managing character creation and configuration
  */
-export function getCharacterImplementation(characterType: string): CharacterImplementation {
-  // Return from cache if available
-  if (characterImplementations[characterType]) {
-    return characterImplementations[characterType];
+export class CharacterFactory {
+  private configCache: Map<string, CharacterConfig> = new Map();
+  private implementationCache: Map<string, CharacterImplementation> = new Map();
+  private availableTypes: string[] = [
+    'vortex',
+    'guardian',
+    'striker',
+    'mystic',
+    'flame',
+    'frost',
+    'shadow',
+    'titan',
+    'archer',
+    'blade',
+    'void',
+    'chaos'
+  ];
+
+  /**
+   * Get character configuration by type
+   * @param type Character type identifier
+   * @returns Promise of character configuration object
+   */
+  async getConfig(type: string): Promise<CharacterConfig> {
+    if (!this.hasCharacterType(type)) {
+      throw new Error(`Character type '${type}' does not exist`);
+    }
+
+    // Check cache first
+    const cachedConfig = this.configCache.get(type);
+    if (cachedConfig) return cachedConfig;
+
+    try {
+      // Dynamic import of config
+      const configModule = await import(`./${type}/config`);
+      const config = configModule[`${type}Config`];
+      
+      // Cache the config
+      this.configCache.set(type, config);
+      
+      return config;
+    } catch (error) {
+      console.error(`Failed to load config for character type: ${type}`, error);
+      throw new Error(`Character config not found for type: ${type}`);
+    }
   }
-  
-  // Try to load character implementation
-  try {
-    // This would be dynamic in a real implementation
-    // For now, we'll just return the default character
-    console.warn(`No implementation found for character type: ${characterType}, using default`);
-    const implementation = defaultCharacter;
-    
-    // Cache the implementation
-    characterImplementations[characterType] = implementation;
-    
-    return implementation;
-  } catch (error) {
-    console.error(`Failed to load character implementation for ${characterType}:`, error);
-    return defaultCharacter;
+
+  /**
+   * Get character implementation by type
+   * @param type Character type identifier
+   * @returns Promise of character implementation object
+   */
+  async getImplementation(type: string): Promise<CharacterImplementation> {
+    if (!this.hasCharacterType(type)) {
+      throw new Error(`Character type '${type}' does not exist`);
+    }
+
+    // Check cache first
+    const cachedImpl = this.implementationCache.get(type);
+    if (cachedImpl) return cachedImpl;
+
+    try {
+      // Dynamic import of implementation
+      const implModule = await import(`./${type}`);
+      const implementation = implModule.default;
+      
+      // Cache the implementation
+      this.implementationCache.set(type, implementation);
+      
+      return implementation;
+    } catch (error) {
+      console.error(`Failed to load implementation for character type: ${type}`, error);
+      throw new Error(`Character implementation not found for type: ${type}`);
+    }
+  }
+
+  /**
+   * Get all available character types
+   * @returns Array of character type identifiers
+   */
+  getAvailableTypes(): string[] {
+    return [...this.availableTypes];
+  }
+
+  /**
+   * Check if a character type exists
+   * @param type Character type to check
+   * @returns Boolean indicating if the type exists
+   */
+  hasCharacterType(type: string): boolean {
+    return this.availableTypes.includes(type);
+  }
+
+  /**
+   * Clear the cache for a specific character type or all types
+   * @param type Optional character type to clear cache for
+   */
+  clearCache(type?: string): void {
+    if (type) {
+      this.configCache.delete(type);
+      this.implementationCache.delete(type);
+    } else {
+      this.configCache.clear();
+      this.implementationCache.clear();
+    }
   }
 }
 
-/**
- * Get all available character implementations
- * @returns Record of all character implementations
- */
-export function getAllCharacterImplementations(): Record<string, CharacterImplementation> {
-  return characterImplementations;
-}
-
-/**
- * Clear the character implementation cache
- * Useful for testing or hot reloading
- */
-export function clearCharacterCache(): void {
-  // Clear all keys from the characterImplementations object
-  Object.keys(characterImplementations).forEach(key => {
-    delete characterImplementations[key];
-  });
-}
+// Export singleton instance
+export default new CharacterFactory();

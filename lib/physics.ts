@@ -1,14 +1,104 @@
 // Core physics types and functions for deterministic circle-based gameplay
 import { stunTarget } from './game';
-import { getCharacterConfig } from './characterConfig';
-import { handleCollision } from './characters/physicsUtils';
+import { getCharacterConfigSync } from './characterConfig';
+import { handleCollision } from './characters/characterUtils';
 
 export interface Vector {
   x: number
   y: number
 }
 
+export interface VisualEffects {
+  color: string;
+  trail: {
+    color: string;
+    opacity: number;
+    lifetime: number;
+  };
+  glow: {
+    color: string;
+    strength: number;
+  };
+}
+
 export interface CircleEntity {
+  properties?: {
+    visualEffects: VisualEffects;
+    activeTimeouts?: NodeJS.Timeout[];
+    // Charging properties for special abilities
+    isCharging?: boolean;
+    chargeStartTime?: number;
+    chargeDuration?: number;
+    chargeDirection?: Vector;
+    chargeSpeed?: number;
+    chargeDamage?: number;
+    chargeStartPos?: Vector;
+    chargeEndPos?: Vector;
+    // Ice shard properties
+    isIceShard?: boolean;
+    shatterOnImpact?: boolean;
+    shardCount?: number;
+    freezeDuration?: number;
+    slowStrength?: number;
+    // Freeze effect properties
+    freezeEffect?: {
+      duration: number;
+      slowStrength: number;
+      startTime: number;
+    };
+    // Slow effect properties
+    slowDuration?: number;
+    slowStartTime?: number;
+    
+    // Mystic-specific properties
+    isMysticThread?: boolean;
+    webRadius?: number;
+    webDuration?: number;
+    webSlowStrength?: number;
+    hasHomed?: boolean;
+    targetId?: string | null;
+    isMysticWeb?: boolean;
+    creationTime?: number;
+    trappedEnemies?: Set<string>;
+    healAmount?: number;
+    lastHealTime?: number;
+    isImpactWeb?: boolean;
+    webSlow?: {
+       strength: number;
+       startTime: number;
+     };
+     homingStrength?: number;
+      duration?: number;
+    // Shadow-specific properties
+    isStealthed?: boolean;
+    stealthOpacity?: number;
+    stealthStartTime?: number;
+    stealthDuration?: number;
+    shadowCloneId?: string;
+    isClone?: boolean;
+    cloneOwnerId?: string;
+    cloneCreationTime?: number;
+    cloneDuration?: number;
+    lastAttackTime?: number;
+    attackCooldown?: number;
+    damageMultiplier?: number;
+    originalOpacity?: number;
+    isShadowClone?: boolean;
+    // Titan-specific properties
+    isGrabbed?: boolean;
+    grabberId?: string;
+    grabStartTime?: number;
+    grabDuration?: number;
+    isStunned?: boolean;
+    stunStartTime?: number;
+    stunDuration?: number;
+    // Projectile-specific properties
+    isIronShot?: boolean;
+    knockbackForce?: number;
+    armorPiercing?: boolean;
+    heavyImpact?: boolean;
+    shockwaveOnHit?: boolean;
+  };
   id: string
   position: Vector
   velocity: Vector
@@ -22,7 +112,7 @@ export interface CircleEntity {
   restitution: number // Bounce coefficient (0-1)
   friction: number // Movement friction (0-1)
   isStatic: boolean // Immovable objects
-  type: 'player' | 'projectile' | 'pickup' | 'hazard' | 'aura'
+  type: 'player' | 'projectile' | 'pickup' | 'hazard' | 'aura' | 'character'
   ownerId?: string // For projectiles
   lifetime?: number // For temporary entities
   invulnerableUntil?: number // Immunity frames
@@ -56,14 +146,10 @@ export interface WeaponAura extends CircleEntity {
   affectedEntities: Set<string> // Track which entities are in range
 }
 
-export interface Projectile extends CircleEntity {
-  type: 'projectile'
-  speed: number
-  lifetime: number
-  piercing: number // How many entities it can hit
-  hitsRemaining: number
-  characterType?: string // For visual styling
-}
+import { ProjectileEntity, ProjectileProperties } from './characters/projectileInterface';
+
+// Re-export ProjectileEntity and ProjectileProperties for backwards compatibility
+export type { ProjectileEntity, ProjectileProperties };
 
 export interface Collision {
   entityA: CircleEntity
@@ -80,6 +166,9 @@ export interface PhysicsWorld {
   timeAccumulator: number
   fixedTimeStep: number // 1/60 for 60fps physics
   bounds: { width: number; height: number }
+  
+  // Helper method to add entities
+  addEntity(entity: CircleEntity): void
 }
 
 // Vector math utilities
@@ -133,13 +222,18 @@ export const Vector = {
 
 // Physics simulation functions
 export function createPhysicsWorld(width: number, height: number): PhysicsWorld {
+  const entities = new Map<string, CircleEntity>();
+  
   return {
-    entities: new Map(),
+    entities,
     gravity: Vector.create(0, 0), // No gravity by default for top-down arena
     airFriction: 0.99,
     timeAccumulator: 0,
     fixedTimeStep: 1 / 60, // 60 FPS physics
-    bounds: { width, height }
+    bounds: { width, height },
+    addEntity(entity: CircleEntity): void {
+      entities.set(entity.id, entity);
+    }
   }
 }
 
@@ -156,6 +250,34 @@ export function updateWorldBounds(world: PhysicsWorld, width: number, height: nu
 }
 
 export function createCircleEntity(
+  id: string,
+  x: number,
+  y: number,
+  radius: number,
+  type: CircleEntity['type'] = 'player',
+  visualEffects?: VisualEffects
+): CircleEntity {
+  return {
+    id,
+    position: Vector.create(x, y),
+    velocity: Vector.create(),
+    acceleration: Vector.create(),
+    radius,
+    mass: Math.PI * radius * radius,
+    health: 100,
+    maxHealth: 100,
+    damage: 20,
+    restitution: 1.0,
+    friction: 1.0,
+    isStatic: false,
+    type,
+    invulnerableUntil: 0,
+    ...(visualEffects && { properties: { visualEffects } })
+  }
+}
+
+// Original function preserved for backwards compatibility
+export function _createCircleEntity(
   id: string,
   x: number,
   y: number,
@@ -189,7 +311,7 @@ export function createProjectile(
   ownerId: string,
   lifetime: number = 3000,
   characterType?: string
-): Projectile {
+): ProjectileEntity {
   const velocity = Vector.multiply(Vector.normalize(direction), speed)
   
   return {
@@ -201,9 +323,9 @@ export function createProjectile(
     mass: 1,
     health: 1,
     maxHealth: 1,
-    damage: 10, // Reduced default damage from 25 to 10
+    damage: 10,
     restitution: 0.2,
-    friction: 1, // No friction for projectiles
+    friction: 1,
     isStatic: false,
     type: 'projectile',
     ownerId,
@@ -211,7 +333,20 @@ export function createProjectile(
     lifetime,
     piercing: 0,
     hitsRemaining: 1,
-    characterType
+    properties: {
+      visualEffects: {
+        color: '#FFFFFF',
+        trail: {
+          color: '#FFFFFF',
+          opacity: 0.5,
+          lifetime: 500
+        },
+        glow: {
+          color: '#FFFFFF',
+          strength: 0.5
+        }
+      }
+    }
   }
 }
 
@@ -411,7 +546,7 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
   
   // Handle projectile hits
   if (entityA.type === 'projectile' || entityB.type === 'projectile') {
-    const projectile = entityA.type === 'projectile' ? entityA as Projectile : entityB as Projectile
+    const projectile = entityA.type === 'projectile' ? entityA as ProjectileEntity : entityB as ProjectileEntity
     const target = entityA.type === 'projectile' ? entityB : entityA
     
     try {
@@ -481,7 +616,7 @@ export function resolveCollision(collision: Collision, world: PhysicsWorld): voi
       // Lightning Striker spear immobilization
       if ((projectile as any).style === 'spear') {
         // Get the character config for the striker to use the correct stun duration
-        const strikerConfig = getCharacterConfig('striker')
+        const strikerConfig = getCharacterConfigSync('striker')
         stunTarget(target.id, strikerConfig.stunDuration || 500) // Use config duration or fallback to 0.5 seconds
       }
       // Check for combo invulnerability (Iron Titan during grab combo)
@@ -869,7 +1004,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
               
               for (const [targetId, targetEntity] of world.entities) {
                 if (targetEntity.type === 'player' && 
-                    targetEntity.id !== (entity as Projectile).ownerId &&
+                    targetEntity.id !== (entity as ProjectileEntity).ownerId &&
                     targetEntity.health > 0) {
                   const distance = Vector.distance(entity.position, targetEntity.position)
                   if (distance < nearestDistance) {
@@ -1340,7 +1475,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
               // Apply suction to nearby enemies
               for (const [targetId, targetEntity] of world.entities) {
                 if (targetEntity.type === 'player' && 
-                    targetEntity.id !== (entity as Projectile).ownerId &&
+                    targetEntity.id !== (entity as ProjectileEntity).ownerId &&
                     targetEntity.health > 0) {
                   const distance = Vector.distance(entity.position, targetEntity.position)
                   const vortexRadius = projectileSpecial.vortexRadius || 60
@@ -1360,7 +1495,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
                       projectileSpecial.lastDamageTime.set(targetId, currentTime)
                       
                       // Increment stack for vortex owner (only when damage is actually applied)
-                      const ownerId = (entity as Projectile).ownerId
+                      const ownerId = (entity as ProjectileEntity).ownerId
                       if (ownerId && world.entities.has(ownerId)) {
                         const owner = world.entities.get(ownerId)
                         if (owner) {
@@ -1389,7 +1524,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
           // Check for nearby enemies
           for (const [targetId, targetEntity] of world.entities) {
             if (targetEntity.type === 'player' && 
-                targetEntity.id !== (entity as Projectile).ownerId &&
+                targetEntity.id !== (entity as ProjectileEntity).ownerId &&
                 targetEntity.health > 0) {
               const distance = Vector.distance(entity.position, targetEntity.position)
               if (distance <= (projectileSpecial.activationRadius || 50)) {
@@ -1408,7 +1543,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
           // Find nearby enemies for chaining
           for (const [targetId, targetEntity] of world.entities) {
             if (targetEntity.type === 'player' && 
-                targetEntity.id !== (entity as Projectile).ownerId &&
+                targetEntity.id !== (entity as ProjectileEntity).ownerId &&
                 targetEntity.health > 0 &&
                 !projectileSpecial.alreadyChained.has(targetId)) {
               const distance = Vector.distance(entity.position, targetEntity.position)
@@ -1436,7 +1571,7 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
             // Teleport to a new position near an enemy
             for (const [targetId, targetEntity] of world.entities) {
               if (targetEntity.type === 'player' && 
-                  targetEntity.id !== (entity as Projectile).ownerId &&
+                  targetEntity.id !== (entity as ProjectileEntity).ownerId &&
                   targetEntity.health > 0) {
                 // Teleport behind the target
                 const offsetDirection = Vector.normalize(Vector.subtract(entity.position, targetEntity.position))

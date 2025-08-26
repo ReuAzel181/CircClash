@@ -1,17 +1,19 @@
 // Character interface definitions for standardized implementation
-import { Vector, CircleEntity, PhysicsWorld } from '../physics';
+import { Vector, PhysicsWorld, CircleEntity } from '../physics';
+import { ProjectileEntity } from './projectileInterface';
 
 // Base interface for all character abilities
 export interface CharacterAbility {
   execute(entityId: string, direction: Vector, world: PhysicsWorld): void;
   getCooldown(): number;
+  isOnCooldown(): boolean;
 }
 
 // Interface for character-specific projectile behaviors
 export interface ProjectileBehavior {
-  onUpdate?(projectile: any, world: PhysicsWorld, deltaTime: number): void;
-  onCollision?(projectile: any, target: CircleEntity, world: PhysicsWorld): void;
-  onCreation?(projectile: any, owner: CircleEntity): void;
+  onUpdate?(projectile: ProjectileEntity, world: PhysicsWorld, deltaTime: number): void;
+  onCollision?(projectile: ProjectileEntity, target: ProjectileEntity, world: PhysicsWorld): void;
+  onCreation?(projectile: ProjectileEntity, owner: ProjectileEntity): void;
 }
 
 // Main character implementation interface

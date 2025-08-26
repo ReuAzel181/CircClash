@@ -3,7 +3,7 @@
 import { 
   PhysicsWorld, 
   CircleEntity, 
-  Projectile,
+  ProjectileEntity,
   createPhysicsWorld, 
   createCircleEntity, 
   createProjectile,
@@ -12,7 +12,7 @@ import {
   addForce,
   updateWorldBounds
 } from './physics'
-import { getCharacterType, getCharacterConfig, CHARACTER_CONFIGS } from './characterConfig'
+import { getCharacterType, getCharacterConfigSync, CHARACTER_CONFIGS } from './characterConfig'
 
 export interface GameConfig {
   arenaWidth: number
@@ -205,7 +205,7 @@ export function spawnBot(
   
   // Verify character type exists in configuration
   const characterType = getCharacterType(botId)
-  const config = getCharacterConfig(characterType)
+  const config = getCharacterConfigSync(characterType)
   if (!config) {
     console.warn(`Unknown character type: ${characterType}, using default config`)
   }
@@ -291,7 +291,7 @@ export function fireProjectile(
   shooterId: string,
   direction: Vector,
   weaponData?: any
-): Projectile | null {
+): ProjectileEntity | null {
   if (!currentGame) return null
   
   const shooter = currentGame.world.entities.get(shooterId)
@@ -299,13 +299,13 @@ export function fireProjectile(
   
   // Extract character type from shooterId and get config
   const characterType = getCharacterType(shooterId)
-  const config = getCharacterConfig(characterType)
+  const config = getCharacterConfigSync(characterType)
   
   // Handle multi-shot abilities
   const shotCount = config.multiShot || 1
   const spreadAngle = config.spreadAngle || 0
   
-  const projectiles: Projectile[] = []
+  const projectiles: ProjectileEntity[] = []
   
   for (let i = 0; i < shotCount; i++) {
     let shotDirection = direction
@@ -689,7 +689,7 @@ export function updateBotAI(botId: string): void {
   
   // Get character configuration
   const characterType = getCharacterType(botId)
-  const config = getCharacterConfig(characterType)
+  const config = getCharacterConfigSync(characterType)
   
   // Ensure attack range is properly set (fallback to config if not set)
   const attackRange = (bot as any).attackRange || config.attackRange || 300
@@ -896,7 +896,7 @@ function stunTarget(targetId: string, duration: number) {
 export { stunTarget };
 
 // Import the character system utilities
-import { fireCharacterAttack } from './characters/gameUtils';
+import { fireCharacterAttack } from './characters/characterUtils';
 
 function fireCharacterSpecificAttack(botId: string, direction: Vector, characterType: string): void {
   if (!currentGame) return;
@@ -913,7 +913,7 @@ function fireCharacterSpecificAttack(botId: string, direction: Vector, character
 
 // Fallback implementation for backward compatibility
 function fallbackFireCharacterAttack(botId: string, direction: Vector, characterType: string): void {
-  const config = getCharacterConfig(characterType)
+  const config = getCharacterConfigSync(characterType)
   const bot = currentGame?.world.entities.get(botId)
   if (!bot || !currentGame) return
 
