@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "postinstall": "chmod +x node_modules/.bin/next"
   },
   "dependencies": {
     "clsx": "^2.1.1",
