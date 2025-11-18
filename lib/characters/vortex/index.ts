@@ -336,7 +336,7 @@ export class Vortex extends BaseCharacter {
     if (distance <= vortexConfig.attackRange) {
       if (ai.shouldUseSpecialAbility(owner, target)) {
         ai.useSpecialAbility(owner, target, world);
-      } else if (!(this.primaryAttack as any).isOnCooldown || true) {
+      } else if (!(this.primaryAttack as any).isOnCooldown()) {
         const attackDirection = ai.calculateAttackDirection(owner, target);
         this.primaryAttack.execute(owner.id, attackDirection, world);
       }

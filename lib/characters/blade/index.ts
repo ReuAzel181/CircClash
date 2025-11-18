@@ -86,9 +86,7 @@ export function bladeProjectileBehavior(projectile: ProjectileEntity & {
   chainedTargets?: Set<string>;
   createdAt?: number;
 }, world: PhysicsWorld, deltaTime: number): void {
-  // Standard projectile movement
-  projectile.position.x += projectile.velocity.x * deltaTime;
-  projectile.position.y += projectile.velocity.y * deltaTime;
+  // Physics integration handles movement - no manual position update needed
 
   // Check for collisions with enemies
   Array.from(world.entities.entries()).forEach(([entityId, entity]) => {

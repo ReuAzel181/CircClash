@@ -11,6 +11,7 @@ import {
   pauseGame, 
   stopGame, 
   spawnBot, 
+  spawnPlayer,
   getCurrentGame,
   setArenaSize as updateGameArenaSize,
   GameConfig 
@@ -180,6 +181,7 @@ export default function QuickPlayPage() {
   const [gameStartTime, setGameStartTime] = useState<number>(0)
   const [battleResult, setBattleResult] = useState<string | null>(null)
   const [gameUpdateTrigger, setGameUpdateTrigger] = useState(0)
+  const [charactersSelected, setCharactersSelected] = useState(false)
   
   // Dynamic arena size - calculate based on viewport - optimized for 100% zoom
   const [arenaSize, setArenaSize] = useState({ width: 600, height: 310 })
@@ -270,23 +272,49 @@ export default function QuickPlayPage() {
     return () => window.removeEventListener('gameOver', handleGameOver)
   }, [editingStats])
 
+  const handleStartGame = () => {
+    initializeGame()
+    pauseGame() // Start paused so user can edit stats first
+    setGameState('paused')
+    setGameStats({ time: 0, eliminations: 0 })
+    setGameStartTime(Date.now())
+    setBattleResult(null)
+  }
+
   const initializeGame = () => {
+    // Check if editingStats has valid data before proceeding
+    if (!editingStats || editingStats.length === 0 || !editingStats[0] || !editingStats[0].stats) {
+      console.error('Cannot initialize game: editingStats is not properly loaded')
+      return
+    }
+
     const gameConfig: GameConfig = {
       arenaWidth: arenaSize.width,
       arenaHeight: arenaSize.height,
       mode: 'roulette',
-      maxPlayers: editingStats.length,
+      maxPlayers: editingStats.length + 1, // +1 for human player
       enablePowerups: false,
       enableHazards: false
     }
 
     startGame(gameConfig)
     
-    // Spawn all selected fighters as AI bots with adaptive spacing based on arena size
-    const spawnPositions = generateAdaptiveSpawnPositions(arenaSize.width, arenaSize.height, editingStats.length)
+    // Spawn human player first
+    const humanPlayer = spawnPlayer('human_player', arenaSize.width / 4, arenaSize.height / 2, editingStats[0])
+    if (humanPlayer && editingStats[0].stats) {
+      humanPlayer.health = editingStats[0].stats.health * globalHealthMultiplier
+      humanPlayer.maxHealth = humanPlayer.health
+      humanPlayer.damage = editingStats[0].stats.attack * 0.10
+      humanPlayer.mass = Math.max(1, 50 - editingStats[0].stats.speed * 0.3)
+      ;(humanPlayer as any).defense = editingStats[0].stats.defense
+      ;(humanPlayer as any).attackRange = editingStats[0].stats.range
+    }
     
-    editingStats.forEach((char, index) => {
-      const pos = spawnPositions[index] || { x: arenaSize.width / 2, y: arenaSize.height / 2 }
+    // Spawn AI bots with adaptive spacing (excluding human player position)
+    const spawnPositions = generateAdaptiveSpawnPositions(arenaSize.width, arenaSize.height, editingStats.length - 1)
+    
+    editingStats.slice(1).forEach((char, index) => {
+      const pos = spawnPositions[index] || { x: arenaSize.width * 3 / 4, y: arenaSize.height / 2 }
       const bot = spawnBot(`bot_${char.id}`, pos.x, pos.y, 'hard')
       
       // Apply custom stats with global health multiplier
@@ -303,15 +331,22 @@ export default function QuickPlayPage() {
     })
   }
 
-  const handleStartGame = () => {
+  const handleSelectCharacters = () => {
     if (selectedFighters.length < 2) {
       alert('Please select 2 fighters for the duel!')
       return
     }
     
+    setCharactersSelected(true)
+    // Initialize editing stats when characters are selected
+    setEditingStats([...selectedFighters])
+  }
+
+  const handleBeginBattle = () => {
     initializeGame()
-    pauseGame() // Start paused so user can edit stats first
-    setGameState('paused')
+    applyAllStatsToGame() // Apply stats before starting
+    resumeGame() // Start the game immediately
+    setGameState('playing')
     setGameStats({ time: 0, eliminations: 0 })
     setGameStartTime(Date.now())
     setBattleResult(null)
@@ -560,7 +595,7 @@ export default function QuickPlayPage() {
                     <div style={{position: 'absolute', left: 0, right: 0, bottom: '50px', height: '500px', pointerEvents: 'none', zIndex: 20}}></div>
 
                     {/* Player 1 Side - Left */}
-                    <div className="col-span-4 relative min-h-[420px]">
+                    <div className="col-span-3 relative min-h-[420px]">
                       {selectedFighters[0] ? (
                         <motion.div 
                           className="relative h-full bg-gradient-to-br from-red-600/80 via-red-700/60 to-black/80 flex flex-col min-h-[580px]"
@@ -631,7 +666,7 @@ export default function QuickPlayPage() {
                     </div>
 
                     {/* Center - Character Grid */}
-                    <div className="col-span-4 bg-black/40 backdrop-blur-sm border-x border-blue-500/30 flex flex-col min-h-[420px]">
+                    <div className="col-span-6 bg-black/40 backdrop-blur-sm border-x border-blue-500/30 flex flex-col min-h-[420px]">
                       
                       {/* VS Display */}
                       <div className="text-center py-6 border-b border-blue-500/30">
@@ -705,21 +740,21 @@ export default function QuickPlayPage() {
                         </div>
                       </div>
 
-                      {/* Bottom Controls */}
+                      {/* Start Battle Button */}
                       <div className="p-4 border-t border-blue-500/30 flex-shrink-0 mb-16">
                         {selectedFighters.length === 2 ? (
                           <motion.button
-                            onClick={handleStartGame}
-                            className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-red-600 hover:from-blue-500 hover:via-purple-500 hover:to-red-500 text-white font-black py-4 px-8 text-xl transition-all duration-300 shadow-2xl border border-blue-400/50 flex items-center justify-center gap-3"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                            onClick={handleBeginBattle}
+                            className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-black py-4 px-6 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 border-2 border-red-400"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                           >
-                            <Play className="w-6 h-6" />
-                            START BATTLE
+                            <div className="text-xl mb-1">⚔️ BEGIN BATTLE ⚔️</div>
+                            <div className="text-sm opacity-90">Start the fight immediately!</div>
                           </motion.button>
                         ) : (
                           <div className="text-center text-gray-400 py-4">
-                            <div className="text-lg font-bold mb-1">SELECT FIGHTERS</div>
+                            <div className="text-lg font-bold mb-1">SELECT 2 FIGHTERS</div>
                             <div className="text-sm">Choose your warriors to begin</div>
                           </div>
                         )}
@@ -727,13 +762,13 @@ export default function QuickPlayPage() {
                     </div>
 
                     {/* Player 2 Side - Right */}
-                    <div className="col-span-4 relative min-h-[420px]">
+                    <div className="col-span-3 relative min-h-[420px]">
                       {selectedFighters[1] ? (
                         <motion.div 
                           className="relative h-full bg-gradient-to-bl from-blue-600/80 via-blue-700/60 to-black/80 flex flex-col min-h-[580px]"
                           initial={{ x: 300, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
-                          transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
                         >
                           {/* Character artwork background */}
                           <div className="absolute inset-0 bg-gradient-to-l from-blue-900/60 via-blue-800/40 to-transparent"></div>
@@ -950,7 +985,7 @@ export default function QuickPlayPage() {
                         width={arenaSize.width}
                         height={arenaSize.height}
                         className="w-full h-full"
-                        playerId={undefined}
+                        playerId="human_player"
                         onGameStateChange={() => {}}
                         theme={arenaTheme}
                         paused={paused}
@@ -1030,58 +1065,7 @@ export default function QuickPlayPage() {
                       </motion.div>
                     )}
 
-                    {/* Enhanced Pause Overlay - Tekken Style */}
-                    {gameState === 'paused' && (
-                      <motion.div
-                        className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                      >
-                        <div className="bg-gradient-to-br from-blue-600 via-purple-700 to-red-600 rounded-xl p-6 text-center border-4 border-blue-300 shadow-2xl relative overflow-hidden">
-                          {/* Animated background */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-red-500/20 animate-pulse"></div>
-                          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-400 via-purple-400 to-red-400 animate-pulse"></div>
-                          
-                          <div className="relative z-10">
-                            <div className="text-6xl mb-3 animate-pulse">⚔️</div>
-                            <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">FIGHTERS READY</h2>
-                            <div className="bg-black bg-opacity-50 rounded-lg p-3 mb-3">
-                              <p className="text-blue-100 mb-2">
-                                The arena awaits your command!
-                              </p>
-                              <p className="text-white text-sm">
-                                Customize fighter stats on the right panel, then unleash the battle!
-                              </p>
-                            </div>
-                            
-                            {/* Battle preview */}
-                            <div className="flex justify-center items-center gap-3 mb-3">
-                              {selectedFighters[0] && (
-                                <div className="text-center">
-                                  <div className="text-2xl">{selectedFighters[0].icon}</div>
-                                  <div className="text-white text-xs">{selectedFighters[0].name}</div>
-                                </div>
-                              )}
-                              <div className="text-yellow-400 font-bold text-lg animate-pulse">VS</div>
-                              {selectedFighters[1] && (
-                                <div className="text-center">
-                                  <div className="text-2xl">{selectedFighters[1].icon}</div>
-                                  <div className="text-white text-xs">{selectedFighters[1].name}</div>
-                                </div>
-                              )}
-                            </div>
-                            
-                              <button
-                              onClick={handleResumeGame}
-                              className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 mx-auto transition-all duration-300 transform hover:scale-105 shadow-lg text-base"
-                            >
-                              <Play className="w-5 h-5" />
-                              START BATTLE
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
+
                   </div>
                 </div>
               </div>
@@ -1114,25 +1098,16 @@ export default function QuickPlayPage() {
                   <div className="bg-white rounded-lg shadow-sm border p-3 h-full flex flex-col">
                     {/* Quick Actions */}
                     <div className="flex gap-1 mb-3">
-                      {/* Pause/Resume control in Arena Settings */}
-                      <button
-                        onClick={() => {
-                          if (gameState === 'playing') {
-                            handlePauseGame()
-                          } else {
-                            handleResumeGame()
-                          }
-                        }}
-                        className={`px-3 py-1 rounded text-xs flex items-center gap-1 ${gameState === 'playing' ? 'bg-yellow-500 text-white' : 'bg-green-500 text-white'}`}
-                      >
-                        {gameState === 'playing' ? (
-                          <Pause className="w-3 h-3" />
-                        ) : (
+                      {gameState === 'paused' && (
+                        <button
+                          onClick={handleResumeGame}
+                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+                        >
                           <Play className="w-3 h-3" />
-                        )}
-                        {gameState === 'playing' ? 'Pause' : (gameState === 'paused' ? 'Resume' : 'Start')}
-                      </button>
-
+                          Start
+                        </button>
+                      )}
+                      
                       {(gameState === 'ended' || gameState === 'paused') && (
                         <button
                           onClick={handleRestart}
@@ -1291,12 +1266,7 @@ export default function QuickPlayPage() {
             </div>
           )}
 
-          {/* Battle Info */}
-          {gameState === 'playing' && (
-            <div className="mt-4 bg-white rounded-lg p-4 text-center text-sm text-gray-600 flex-shrink-0">
-              <p><strong>Tekken-Style Duel in Progress:</strong> Epic 1v1 battle • No player input needed</p>
-            </div>
-          )}
+
         </div>
       </div>
     </div>

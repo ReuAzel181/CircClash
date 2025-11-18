@@ -112,13 +112,17 @@ export interface CharacterConfig extends BaseProjectileConfig {
   stacksToTrigger?: number // Number of enemy hits needed to trigger rapid fire
   rapidFireCount?: number // Number of consecutive shots in rapid fire
   rapidFireDelay?: number // Delay between rapid fire shots in ms
+  // Ballistic properties
+  ballisticCoefficient?: number // Aerodynamic efficiency
+  muzzleVelocity?: number // Initial projectile velocity
+  projectileMass?: number // Mass of the projectile
 }
 
 // Configurations for characters that haven't been refactored to individual implementations yet
 export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
   
   archer: {
-    projectileLifetime: 2000,
+    projectileLifetime: 3000, // Longer for ballistic arc
     piercing: 0,
     trailOpacity: 0.6,
     trailLifetime: 400,
@@ -129,8 +133,8 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     color: '#10b981', // Emerald Green
     bulletColor: '#10b981',
     damage: 14,
-    projectileSpeed: 800,
-    bulletRadius: 1.47, // Reduced by 30% (from 2.1)
+    projectileSpeed: 650, // Realistic arrow velocity
+    bulletRadius: 1.2, // Arrow-like projectile
     firingRate: 200,
     attackRange: 550,
     bulletStyle: 'tunnel',
@@ -138,7 +142,10 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     trailEffect: true,
     glowEffect: true,
     specialAbility: 'Wind Tunnel',
-    abilityDescription: 'Creates gusting wind corridors that redirect and accelerate projectiles'
+    abilityDescription: 'Creates gusting wind corridors that redirect and accelerate projectiles',
+    ballisticCoefficient: 0.5, // Good aerodynamics for arrows
+    muzzleVelocity: 650,
+    projectileMass: 0.3 // Light arrow
   },
   
   samurai: {
@@ -168,7 +175,7 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
   },
   
   sniper: {
-    projectileLifetime: 2500,
+    projectileLifetime: 4000, // Long range ballistic trajectory
     piercing: 1,
     trailOpacity: 0.8,
     trailLifetime: 700,
@@ -179,8 +186,8 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     color: '#0f172a', // Dark Slate
     bulletColor: '#0f172a',
     damage: 22,
-    projectileSpeed: 1000,
-    bulletRadius: 1.96, // Reduced by 30% (from 2.8)
+    projectileSpeed: 850, // High velocity sniper round
+    bulletRadius: 1.5, // Small, precise bullet
     firingRate: 800,
     attackRange: 650,
     bulletStyle: 'rift',
@@ -188,11 +195,14 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     trailEffect: true,
     glowEffect: true,
     specialAbility: 'Void Rifts',
-    abilityDescription: 'Opens dimensional rifts that allow attacks from unexpected angles'
+    abilityDescription: 'Opens dimensional rifts that allow attacks from unexpected angles',
+    ballisticCoefficient: 0.7, // Excellent aerodynamics for precision
+    muzzleVelocity: 850,
+    projectileMass: 0.8 // Medium weight for stability
   },
   
   bomber: {
-    projectileLifetime: 3000,
+    projectileLifetime: 3500, // Longer for ballistic arc
     piercing: 0,
     trailOpacity: 0.5,
     trailLifetime: 600,
@@ -203,8 +213,8 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     color: '#f97316', // Orange Red
     bulletColor: '#f97316',
     damage: 20,
-    projectileSpeed: 300,
-    bulletRadius: 5.88, // Reduced by 30% (from 8.4)
+    projectileSpeed: 280, // Slower for heavy explosive
+    bulletRadius: 4.5, // Smaller but still visible
     firingRate: 500,
     attackRange: 400,
     bulletStyle: 'mine',
@@ -213,7 +223,10 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     glowEffect: true,
     specialAbility: 'Mine Field',
     abilityDescription: 'Deploys proximity mines that detonate when enemies approach',
-    explosiveRadius: 40
+    explosiveRadius: 40,
+    ballisticCoefficient: 0.25, // Poor aerodynamics due to explosive payload
+    muzzleVelocity: 280,
+    projectileMass: 2.0 // Heavy explosive projectile
   }
 }
 
@@ -263,5 +276,63 @@ export async function getCharacterConfig(characterType: string): Promise<Charact
 
 // Synchronous version for backward compatibility
 export function getCharacterConfigSync(characterType: string): CharacterConfig {
-  return CHARACTER_CONFIGS[characterType] || CHARACTER_CONFIGS.archer; // Default fallback
+  // First check legacy CHARACTER_CONFIGS
+  if (CHARACTER_CONFIGS[characterType]) {
+    return CHARACTER_CONFIGS[characterType];
+  }
+  
+  // Try to get config from individual character implementations
+  try {
+    switch (characterType) {
+      case 'vortex': {
+        const { vortexConfig } = require('./characters/vortex');
+        return vortexConfig;
+      }
+      case 'guardian': {
+        const { guardianConfig } = require('./characters/guardian');
+        return guardianConfig;
+      }
+      case 'striker': {
+        const { strikerConfig } = require('./characters/striker');
+        return strikerConfig;
+      }
+      case 'mystic': {
+        const { mysticConfig } = require('./characters/mystic');
+        return mysticConfig;
+      }
+      case 'flame': {
+        const { flameConfig } = require('./characters/flame');
+        return flameConfig;
+      }
+      case 'frost': {
+        const { frostConfig } = require('./characters/frost');
+        return frostConfig;
+      }
+      case 'shadow': {
+        const { shadowConfig } = require('./characters/shadow');
+        return shadowConfig;
+      }
+      case 'titan': {
+        const { titanConfig } = require('./characters/titan');
+        return titanConfig;
+      }
+      case 'chaos': {
+        const { chaosConfig } = require('./characters/chaos');
+        return chaosConfig;
+      }
+      case 'void': {
+        const { voidConfig } = require('./characters/void');
+        return voidConfig;
+      }
+      case 'blade': {
+        const { bladeConfig } = require('./characters/blade');
+        return bladeConfig;
+      }
+      default:
+        return CHARACTER_CONFIGS.archer; // Final fallback
+    }
+  } catch (error) {
+    console.warn(`Failed to load config for ${characterType}, using archer fallback:`, error);
+    return CHARACTER_CONFIGS.archer; // Fallback on error
+  }
 }

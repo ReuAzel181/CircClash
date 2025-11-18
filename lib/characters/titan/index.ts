@@ -78,7 +78,7 @@ class IronCannonAttack extends BaseAbility {
     // Add extra mass for heavy projectile physics
     ironShot.mass = ironShot.mass * 2;
 
-    world.addEntity(ironShot);
+    world.entities.set(ironShot.id, ironShot);
     this.lastUsed = Date.now();
   }
 }

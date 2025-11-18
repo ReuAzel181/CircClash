@@ -461,14 +461,15 @@ export class Flame extends BaseCharacter {
 
   constructor() {
     super('flame');
-    
-    // Initialize abilities
+    this.ai = new FlameAI();
     this.primaryAttack = new FlameBurstAttack();
     this.specialAbility = new InfernoBurst();
-    this.ai = new FlameAI();
     
-    // Register projectile behavior
-    this.projectileBehaviors['flame'] = flameProjectileBehavior;
+    // Set up projectile behaviors
+    this.projectileBehaviors = {
+      default: flameProjectileBehavior,
+      flame: flameProjectileBehavior
+    };
   }
 
   onUpdate(owner: CircleEntity, world: PhysicsWorld, deltaTime: number): void {

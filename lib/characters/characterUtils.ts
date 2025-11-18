@@ -40,6 +40,25 @@ export class CharacterSystem {
   }
 
   /**
+   * Handle character-specific special ability
+   */
+  async handleCharacterSpecialAbility(entityId: string, direction: Vector, world: PhysicsWorld): Promise<void> {
+    const entity = world.entities.get(entityId);
+    if (!entity) return;
+    
+    const characterType = this.getEntityCharacterType(entityId);
+    
+    try {
+      const characterImpl = await this.characterFactory.getImplementation(characterType);
+      if (characterImpl.specialAbility && !characterImpl.specialAbility.isOnCooldown()) {
+        await characterImpl.specialAbility.execute(entityId, direction, world);
+      }
+    } catch (error) {
+      console.error(`Error handling character special ability for ${characterType}:`, error);
+    }
+  }
+
+  /**
    * Handle character-specific update
    */
   async handleCharacterUpdate(entity: CircleEntity, world: PhysicsWorld, deltaTime: number): Promise<void> {
@@ -127,47 +146,66 @@ export function createProjectile(
   const projectileId = `projectile_${characterType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Calculate position slightly away from owner to prevent self-collision
-  const offset = 10 + (options.radius || config.bulletRadius || 5);
+  // Account for both owner radius and bullet radius
+  const bulletRadius = options.radius || config.bulletRadius || 5;
+  const offset = owner.radius + bulletRadius + 5;
   const position = {
     x: owner.position.x + direction.x * offset,
     y: owner.position.y + direction.y * offset
   };
   
+  // Normalize direction vector to ensure consistent speed
+  const normalizedDirection = Vector.normalize(direction);
+  const speed = options.projectileSpeed || config.projectileSpeed || 400;
+  
   // Create base projectile
+  
+  // Calculate realistic ballistic trajectory with slight upward angle
+  const ballisticAngle = -0.03 // Slight upward angle for ballistic arc
+  const ballisticDirection = {
+    x: normalizedDirection.x * Math.cos(ballisticAngle) - normalizedDirection.y * Math.sin(ballisticAngle),
+    y: normalizedDirection.x * Math.sin(ballisticAngle) + normalizedDirection.y * Math.cos(ballisticAngle)
+  }
+  
+  // Determine projectile mass based on character config or default calculation
+  const projectileMass = (config as any).projectileMass || Math.max(0.1, 2.0 - (speed / 1000))
+  
   const projectile: ProjectileEntity = {
     id: projectileId,
     position,
     velocity: {
-      x: direction.x * (options.projectileSpeed || config.projectileSpeed || 400),
-      y: direction.y * (options.projectileSpeed || config.projectileSpeed || 400)
+      x: ballisticDirection.x * speed,
+      y: ballisticDirection.y * speed
     },
     acceleration: { x: 0, y: 0 },
     radius: options.radius || config.bulletRadius || 5,
-    mass: 1,
+    mass: projectileMass, // Realistic mass affects ballistic behavior
     health: 1,
     maxHealth: 1,
     damage: options.baseDamage || config.damage || 10,
-    restitution: 0.8,
-    friction: 0.1,
+    restitution: 0.1, // Lower restitution for realistic bouncing
+    friction: 0.02, // Minimal friction for projectiles
     isStatic: false,
     type: 'projectile',
     ownerId: owner.id,
     speed: options.projectileSpeed || config.projectileSpeed || 400,
-    lifetime: options.lifetime || 5000, // Default 5 seconds
-    piercing: options.piercing || 0,
-    hitsRemaining: options.piercing || 0,
+    lifetime: options.lifetime || config.projectileLifetime || 5000,
+    piercing: options.piercing || config.piercing || 0,
+    hitsRemaining: (options.piercing || config.piercing || 0) + 1,
     properties: {
       characterType,
+      muzzleVelocity: (config as any).muzzleVelocity || speed,
+      ballisticCoefficient: (config as any).ballisticCoefficient || 0.3,
       ...options,
       visualEffects: options.visualEffects || {
-        color: '#FFFFFF',
+        color: config.bulletColor || '#FFFFFF',
         trail: {
-          color: '#FFFFFF',
-          opacity: 0.5,
-          lifetime: 500
+          color: config.bulletColor || '#FFFFFF',
+          opacity: config.trailOpacity || 0.5,
+          lifetime: config.trailLifetime || 500
         },
         glow: {
-          color: '#FFFFFF',
+          color: config.bulletColor || '#FFFFFF',
           strength: 0.5
         }
       }
@@ -184,10 +222,10 @@ export function createProjectile(
 /**
  * Update a projectile with character-specific behavior
  */
-export function updateProjectile(projectile: ProjectileEntity, world: PhysicsWorld, deltaTime: number): void {
+export async function updateProjectile(projectile: ProjectileEntity, world: PhysicsWorld, deltaTime: number): Promise<void> {
   // Handle character-specific update behavior
   const characterSystem = new CharacterSystem(new CharacterFactory());
-  characterSystem.handleProjectileBehavior(projectile, world, 'update');
+  await characterSystem.handleProjectileBehavior(projectile, world, 'update');
   
   // Handle special projectile types
   if ((projectile as any).isVortex) {
@@ -327,7 +365,7 @@ function handleDefaultProjectileCollision(projectile: ProjectileEntity, target: 
 /**
  * Update entities with character-specific behavior
  */
-export function updateEntities(world: PhysicsWorld, deltaTime: number): void {
+export async function updateEntities(world: PhysicsWorld, deltaTime: number): Promise<void> {
   for (const [id, entity] of world.entities) {
     // Skip dead entities
     if (entity.health <= 0) continue;
@@ -344,7 +382,7 @@ export function updateEntities(world: PhysicsWorld, deltaTime: number): void {
     // Handle projectile updates
     if (entity.type === 'projectile') {
       const projectile = entity as ProjectileEntity;
-      updateProjectile(projectile, world, deltaTime);
+      await updateProjectile(projectile, world, deltaTime);
     }
   }
 }
@@ -352,22 +390,40 @@ export function updateEntities(world: PhysicsWorld, deltaTime: number): void {
 /**
  * Fire a character-specific attack
  */
-export function fireCharacterAttack(entityId: string, direction: Vector, world: PhysicsWorld): void {
+export async function fireCharacterAttack(entityId: string, direction: Vector, world: PhysicsWorld): Promise<void> {
   const entity = world.entities.get(entityId);
   if (!entity) return;
   
   // Get character type from entity ID
   const characterType = getCharacterType(entityId);
   
-  // Delegate to CharacterSystem which handles async/await internally
-  const characterSystem = new CharacterSystem(new CharacterFactory());
-  characterSystem
-    .handleCharacterAttack(entityId, direction, world)
-    .catch((error) => {
-      console.error(`Error handling character attack for ${characterType}:`, error);
-      // Fallback to old system
-      fireDefaultAttack(entityId, direction, characterType, world);
-    });
+  try {
+    // Use the proper character system for character-specific attacks
+    const characterSystem = new CharacterSystem(new CharacterFactory());
+    await characterSystem.handleCharacterAttack(entityId, direction, world);
+  } catch (error) {
+    console.error(`Error handling character attack for ${characterType}:`, error);
+    // Fallback to default attack if character-specific attack fails
+    fireDefaultAttack(entityId, direction, characterType, world);
+  }
+}
+
+/**
+ * Fire a character-specific special ability
+ */
+export async function fireCharacterSpecialAbility(entityId: string, direction: Vector, world: PhysicsWorld): Promise<void> {
+  const entity = world.entities.get(entityId);
+  if (!entity) return;
+  
+  // Get character type from entity ID
+  const characterType = getCharacterType(entityId);
+  
+  try {
+    const characterSystem = new CharacterSystem(new CharacterFactory());
+    await characterSystem.handleCharacterSpecialAbility(entityId, direction, world);
+  } catch (error) {
+    console.error(`Error handling character special ability for ${characterType}:`, error);
+  }
 }
 
 /**
@@ -375,10 +431,21 @@ export function fireCharacterAttack(entityId: string, direction: Vector, world: 
  */
 function fireDefaultAttack(entityId: string, direction: Vector, characterType: string, world: PhysicsWorld): void {
   const entity = world.entities.get(entityId);
-  if (!entity) return;
+  if (!entity) {
+    console.log('🚫 fireDefaultAttack: Entity not found:', entityId);
+    return;
+  }
   
   const config = getCharacterConfigSync(characterType);
   const normalizedDir = Vector.normalize(direction);
+  
+  console.log('🔫 fireDefaultAttack called:', {
+    entityId,
+    characterType,
+    configName: config.name,
+    damage: config.damage,
+    projectileSpeed: config.projectileSpeed
+  });
   
   // Store timeout IDs for cleanup
   const timeouts: NodeJS.Timeout[] = [];
@@ -500,8 +567,18 @@ function fireDefaultAttack(entityId: string, direction: Vector, characterType: s
         radius: config.bulletRadius
       });
       
+      console.log('🌍 Adding projectile to world:', {
+        projectileId: projectile.id,
+        characterType,
+        damage: projectile.damage,
+        speed: projectile.speed,
+        worldEntityCount: world.entities.size
+      });
+      
       // Add projectile to world
       world.entities.set(projectile.id, projectile);
+      
+      console.log('✅ Projectile added. New world entity count:', world.entities.size);
       break;
   }
 }

@@ -69,7 +69,10 @@ export class CharacterFactory {
     try {
       // Dynamic import of implementation
       const implModule = await import(`./${type}`);
-      const implementation = implModule.default;
+      const CharacterClass = implModule.default;
+      
+      // Instantiate the character class
+      const implementation = new CharacterClass();
       
       // Cache the implementation
       this.implementationCache.set(type, implementation);

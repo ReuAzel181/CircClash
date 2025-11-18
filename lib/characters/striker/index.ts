@@ -466,8 +466,11 @@ export class Striker extends BaseCharacter {
     this.specialAbility = new ChainSurge();
     this.ai = new StrikerAI();
     
-    // Register projectile behavior
-    this.projectileBehaviors['striker'] = thunderSpearBehavior;
+    // Set up projectile behaviors
+    this.projectileBehaviors = {
+      default: thunderSpearBehavior,
+      striker: thunderSpearBehavior
+    };
   }
 
   onUpdate(owner: CircleEntity, world: PhysicsWorld, deltaTime: number): void {

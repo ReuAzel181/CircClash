@@ -5,11 +5,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "npm run clean && next dev",
     "build": "next build",
+    "build:clean": "npm run clean && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "postinstall": "chmod +x node_modules/.bin/next"
+    "clean": "rimraf .next",
+    "clean:all": "rimraf .next node_modules/.cache",
+    "postinstall": "echo 'Installation complete'"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -28,6 +32,7 @@
     "eslint-config-next": "14.0.0",
     "postcss": "^8.4.31",
     "prettier": "^3.6.2",
+    "rimraf": "^5.0.5",
     "tailwindcss": "^3.3.5",
     "typescript": "^5.2.0",
     "vitest": "^1.6.1"

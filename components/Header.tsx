@@ -15,6 +15,7 @@ export default function Header() {
     { name: 'Battle Royale', href: '/battle-royale' },
     { name: 'Characters', href: '/characters' },
     { name: 'Custom', href: '/custom' },
+    { name: 'Settings', href: '/settings' },
   ]
 
   const isActive = (href: string) => {

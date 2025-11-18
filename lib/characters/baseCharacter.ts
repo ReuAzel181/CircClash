@@ -139,7 +139,16 @@ export function createStandardProjectile(
   config: any,
   additionalProps: Record<string, any> = {}
 ) {
-  // This will be implemented when we extract the projectile creation code
-  // from the physics.ts file
-  return null;
+  // Import createProjectile dynamically to avoid circular dependency
+  const { createProjectile } = require('./characterUtils');
+  
+  return createProjectile(entityId, owner, direction, {
+    baseDamage: config.damage,
+    projectileSpeed: config.projectileSpeed,
+    radius: config.bulletRadius,
+    piercing: config.piercing,
+    lifetime: config.projectileLifetime,
+    characterType: config.name?.toLowerCase() || entityId.split('_')[1] || 'default',
+    ...additionalProps
+  });
 }

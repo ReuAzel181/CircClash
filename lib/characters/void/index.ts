@@ -63,7 +63,7 @@ export class VoidRiftsAttack extends BaseAbility {
       };
       riftSpecial.spawnTime = Date.now();
 
-      world.addEntity(riftProjectile);
+      world.entities.set(riftProjectile.id, riftProjectile);
     }
     this.lastUsed = Date.now();
   }
@@ -73,9 +73,7 @@ export class VoidRiftsAttack extends BaseAbility {
 export function voidRiftProjectileBehavior(projectile: CircleEntity, world: PhysicsWorld, deltaTime: number): void {
   const projectileSpecial = projectile as any;
   if (!projectileSpecial.isVoidRift) {
-    // Standard projectile behavior for non-rift projectiles
-    projectile.position.x += projectile.velocity.x * deltaTime;
-    projectile.position.y += projectile.velocity.y * deltaTime;
+    // Standard projectile behavior for non-rift projectiles - physics integration handles movement
     return;
   }
 
@@ -84,9 +82,7 @@ export function voidRiftProjectileBehavior(projectile: CircleEntity, world: Phys
 
   switch (projectileSpecial.riftPhase) {
     case 'traveling':
-      // Move toward target
-      projectile.position.x += projectile.velocity.x * deltaTime;
-      projectile.position.y += projectile.velocity.y * deltaTime;
+      // Physics integration handles movement - no manual position update needed
 
       // Check if reached target area or hit enemy
       const targetDistance = Math.sqrt(
@@ -336,6 +332,16 @@ export default class Void extends BaseCharacter {
     this.voidRifts = new VoidRiftsAttack();
     this.ai = new VoidAI();
     this.primaryAttack = this.voidRifts;
+    
+    // Set up projectile behaviors
+    this.projectileBehaviors = {
+      default: {
+        onUpdate: voidRiftProjectileBehavior
+      },
+      rift: {
+        onUpdate: voidRiftProjectileBehavior
+      }
+    };
   }
 
   onUpdate(entity: CircleEntity, world: PhysicsWorld, deltaTime: number): void {

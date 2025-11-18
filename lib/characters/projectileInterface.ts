@@ -72,6 +72,10 @@ export interface ProjectileProperties {
   armorPiercing?: boolean;
   heavyImpact?: boolean;
   shockwaveOnHit?: boolean;
+  // Ballistic properties
+  muzzleVelocity?: number;
+  characterType?: string;
+  ballisticCoefficient?: number;
 }
 
 export interface ProjectileEntity extends CircleEntity {

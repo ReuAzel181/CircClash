@@ -1,6 +1,6 @@
 // Core physics types and functions for deterministic circle-based gameplay
 import { getCharacterConfigSync } from './characterConfig';
-import { handleCollision, stunTarget } from './characters/characterUtils';
+import { handleCollision, stunTarget, updateProjectile } from './characters/characterUtils';
 
 export interface Vector {
   x: number
@@ -225,8 +225,8 @@ export function createPhysicsWorld(width: number, height: number): PhysicsWorld 
   
   return {
     entities,
-    gravity: Vector.create(0, 0), // No gravity by default for top-down arena
-    airFriction: 0.99,
+    gravity: Vector.create(0, 98), // Realistic gravity (9.8 m/s² scaled for game units)
+    airFriction: 0.998, // Slight air resistance for realistic ballistics
     timeAccumulator: 0,
     fixedTimeStep: 1 / 60, // 60 FPS physics
     bounds: { width, height },
@@ -311,7 +311,19 @@ export function createProjectile(
   lifetime: number = 3000,
   characterType?: string
 ): ProjectileEntity {
-  const velocity = Vector.multiply(Vector.normalize(direction), speed)
+  const normalizedDirection = Vector.normalize(direction)
+  
+  // Calculate realistic muzzle velocity with slight upward angle for ballistic trajectory
+  const ballisticAngle = -0.05 // Slight upward angle in radians (~3 degrees)
+  const ballisticDirection = {
+    x: normalizedDirection.x * Math.cos(ballisticAngle) - normalizedDirection.y * Math.sin(ballisticAngle),
+    y: normalizedDirection.x * Math.sin(ballisticAngle) + normalizedDirection.y * Math.cos(ballisticAngle)
+  }
+  
+  const velocity = Vector.multiply(ballisticDirection, speed)
+  
+  // Determine projectile mass based on type and speed (heavier bullets for slower speeds)
+  const projectileMass = Math.max(0.1, 2.0 - (speed / 1000)) // Mass inversely related to speed
   
   return {
     id,
@@ -319,12 +331,12 @@ export function createProjectile(
     velocity,
     acceleration: Vector.create(),
     radius: 5,
-    mass: 1,
+    mass: projectileMass, // Realistic mass affects physics
     health: 1,
     maxHealth: 1,
     damage: 10,
-    restitution: 0.2,
-    friction: 1,
+    restitution: 0.1, // Lower restitution for more realistic bouncing
+    friction: 0.02, // Minimal friction for projectiles
     isStatic: false,
     type: 'projectile',
     ownerId,
@@ -333,6 +345,9 @@ export function createProjectile(
     piercing: 0,
     hitsRemaining: 1,
     properties: {
+      characterType: characterType || 'default',
+      muzzleVelocity: speed, // Store initial muzzle velocity
+      ballisticCoefficient: 0.3, // Aerodynamic efficiency
       visualEffects: {
         color: '#FFFFFF',
         trail: {
@@ -813,7 +828,23 @@ export function applyFriction(world: PhysicsWorld): void {
 export function integrate(entity: CircleEntity, dt: number): void {
   if (entity.isStatic) return
   
-  // Apply gravity
+  // Apply gravity (only to projectiles for realistic ballistics)
+  if (entity.type === 'projectile') {
+    // Apply gravity for realistic trajectory
+    entity.acceleration = Vector.add(entity.acceleration, Vector.create(0, 98)) // 9.8 m/s² scaled
+    
+    // Apply air resistance based on velocity
+    const velocityMagnitude = Vector.magnitude(entity.velocity)
+    if (velocityMagnitude > 0) {
+      const airResistance = Vector.multiply(
+        Vector.normalize(entity.velocity),
+        -0.02 * velocityMagnitude * velocityMagnitude // Quadratic air resistance
+      )
+      entity.acceleration = Vector.add(entity.acceleration, airResistance)
+    }
+  }
+  
+  // Apply acceleration to velocity
   entity.velocity = Vector.add(entity.velocity, Vector.multiply(entity.acceleration, dt))
   
   // Update position
@@ -874,10 +905,20 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
 }
 
 // Main physics simulation step
-export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
+export async function simulateStep(world: PhysicsWorld, deltaTime: number): Promise<void> {
   // Harden immobilization: temporarily disable movement but preserve momentum
   const now = Date.now();
   for (const [id, entity] of world.entities) {
+    // Safety check: Clear stuck grab states after 10 seconds
+    if ((entity as any).isGrabbed && (entity as any).grabStartTime && 
+        now - (entity as any).grabStartTime > 10000) {
+      console.warn(`Clearing stuck grab state for entity ${id}`);
+      delete (entity as any).isGrabbed;
+      delete (entity as any).grabberId;
+      delete (entity as any).grabStartTime;
+      delete (entity as any).grabCooldownUntil;
+    }
+    
     if ((entity as any).immobilized && (entity as any).immobilizedUntil > now) {
       // Save original velocity before immobilization if not already saved
       if (!(entity as any).savedVelocity) {
@@ -921,9 +962,17 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
     
     // Remove expired entities
     for (const [id, entity] of world.entities) {
-      if (entity.lifetime && currentTime > (entity.lifetime + (entity as any).spawnTime || 0)) {
+      if (entity.lifetime && currentTime > ((entity as any).spawnTime || 0) + entity.lifetime) {
         entitiesToRemove.push(id)
         continue
+      }
+      
+      // Check projectile lifetime and mark expired ones for removal
+      if (entity.type === 'projectile' && (entity as any).spawnTime) {
+        const age = Date.now() - (entity as any).spawnTime
+        if (age > (entity.lifetime || 3000)) {
+          entity.health = 0 // Mark for removal
+        }
       }
       
       // Remove dead entities
@@ -1035,6 +1084,12 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
             }
           }
         }
+        
+        // Call character-specific projectile update behavior
+        await updateProjectile(entity as any, world, world.fixedTimeStep);
+        
+        // Apply physics integration to projectiles
+        integrate(entity, world.fixedTimeStep);
         
         // Special projectile behaviors for new abilities
         
@@ -1432,8 +1487,19 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
         
         // Boomerang behavior (Plasma Vortex)
         if (projectileSpecial.isBoomerang && !projectileSpecial.returnPhase) {
-          const distanceTraveled = Vector.distance(entity.position, projectileSpecial.originalPosition || entity.position)
-          if (distanceTraveled >= (projectileSpecial.maxDistance || 300)) {
+          // Ensure originalPosition is set if not already
+          if (!projectileSpecial.originalPosition) {
+            projectileSpecial.originalPosition = { ...entity.position }
+            projectileSpecial.traveledDistance = 0
+          }
+          
+          // Track distance traveled from original position
+          if (!projectileSpecial.traveledDistance) {
+            projectileSpecial.traveledDistance = 0
+          }
+          projectileSpecial.traveledDistance += Vector.magnitude(entity.velocity) * deltaTime
+          
+          if (projectileSpecial.traveledDistance >= (projectileSpecial.maxDistance || 300)) {
             projectileSpecial.returnPhase = true
             // Reverse velocity to return to shooter
             const shooter = world.entities.get(projectileSpecial.originalShooter)
@@ -1602,6 +1668,17 @@ export function simulateStep(world: PhysicsWorld, deltaTime: number): void {
         // Apply freezing effect to projectile movement
         const currentTime = Date.now()
         const speedMultiplier = (entity as any).frozenUntil > currentTime ? 0.3 : 1.0
+        
+        // Debug projectile velocity before position update
+        if (entity.id.includes('projectile') && Math.random() < 0.1) { // Log 10% of projectiles to avoid spam
+          console.log('🎯 Projectile update:', {
+            id: entity.id,
+            velocity: entity.velocity,
+            position: entity.position,
+            fixedTimeStep: world.fixedTimeStep,
+            speedMultiplier
+          });
+        }
         
         // Projectiles only update position, no physics interactions
         entity.position.x += entity.velocity.x * world.fixedTimeStep * speedMultiplier

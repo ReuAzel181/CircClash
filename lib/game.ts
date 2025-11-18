@@ -118,7 +118,7 @@ export function stopGame(): void {
 }
 
 // Main game loop with fixed timestep
-function updateGame(currentTime: number): void {
+async function updateGame(currentTime: number): Promise<void> {
   if (!currentGame || !currentGame.isRunning) {
     console.log(`Game loop skipped - currentGame: ${!!currentGame}, isRunning: ${currentGame?.isRunning}`);
     return;
@@ -144,13 +144,14 @@ function updateGame(currentTime: number): void {
       entity.acceleration = Vector.create(0, 0);
       continue;
     }
-    if ((entity as any).isBot && entity.health > 0) {
+    // Apply AI to all players for autonomous behavior
+    if (entity.type === 'player' && entity.health > 0) {
       updateBotAI(id)
     }
   }
   
   // Run physics simulation
-  simulateStep(currentGame.world, deltaTime)
+  await simulateStep(currentGame.world, deltaTime)
   
   // Check win conditions
   checkWinConditions(currentGame)
@@ -177,11 +178,14 @@ export function spawnPlayer(
   
   const player = createCircleEntity(playerId, x, y, 20, 'player')
   
+  // Mark as bot for autonomous behavior
+  ;(player as any).isBot = true
+  
   // Apply character-specific stats if provided
   if (characterData) {
-    player.health = characterData.stats?.defense * 1.5 || 100
+    player.health = characterData.stats?.health || 100
     player.maxHealth = player.health
-    player.damage = characterData.stats?.damage * 0.5 || 20
+    player.damage = characterData.stats?.attack * 0.1 || 20
     // Speed affects max velocity, not current velocity
     player.mass = Math.max(1, 50 - (characterData.stats?.speed || 50) * 0.3)
   }
@@ -292,18 +296,32 @@ export function fireProjectile(
   direction: Vector,
   weaponData?: any
 ): ProjectileEntity | null {
-  if (!currentGame) return null
+  console.log('🔫 fireProjectile called:', { shooterId, direction, weaponData })
+  
+  if (!currentGame) {
+    console.log('❌ No current game found')
+    return null
+  }
   
   const shooter = currentGame.world.entities.get(shooterId)
-  if (!shooter) return null
+  if (!shooter) {
+    console.log('❌ Shooter not found:', shooterId)
+    return null
+  }
+  
+  console.log('👤 Shooter found:', { id: shooter.id, position: shooter.position, radius: shooter.radius })
   
   // Extract character type from shooterId and get config
   const characterType = getCharacterType(shooterId)
   const config = getCharacterConfigSync(characterType)
   
+  console.log('⚙️ Character config:', { characterType, config })
+  
   // Handle multi-shot abilities
   const shotCount = config.multiShot || 1
   const spreadAngle = config.spreadAngle || 0
+  
+  console.log('🎯 Shot parameters:', { shotCount, spreadAngle })
   
   const projectiles: ProjectileEntity[] = []
   
@@ -322,11 +340,24 @@ export function fireProjectile(
     }
     
     // Calculate spawn position (slightly in front of shooter)
-    const spawnOffset = Vector.multiply(Vector.normalize(shotDirection), shooter.radius + 10)
+    // Account for both shooter radius and bullet radius to prevent sticking out
+    const bulletRadius = config.bulletRadius || 5
+    const spawnOffset = Vector.multiply(Vector.normalize(shotDirection), shooter.radius + bulletRadius + 5)
     const spawnPos = Vector.add(shooter.position, spawnOffset)
     
+    console.log('📍 Spawn calculation:', {
+      bulletRadius,
+      shooterRadius: shooter.radius,
+      totalOffset: shooter.radius + bulletRadius + 5,
+      shotDirection,
+      spawnOffset,
+      spawnPos
+    })
+    
     const speed = config.projectileSpeed || 400
-    const lifetime = weaponData?.lifetime || 3000
+    const lifetime = weaponData?.lifetime || config.projectileLifetime || 3000
+    
+    console.log('🚀 Projectile parameters:', { speed, lifetime })
     
     const projectile = createProjectile(
       `projectile_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -338,6 +369,14 @@ export function fireProjectile(
       lifetime,
       characterType
     )
+    
+    console.log('💥 Projectile created:', {
+      id: projectile.id,
+      position: projectile.position,
+      velocity: projectile.velocity,
+      radius: projectile.radius,
+      damage: projectile.damage
+    })
     
     // Apply character-specific properties from config
     projectile.damage = config.damage || 10
@@ -414,8 +453,14 @@ export function fireProjectile(
       }
     }
     
+    // Check weapon special properties and override bulletStyle if needed
+    let effectiveBulletStyle = config.bulletStyle;
+    if (weaponData?.special?.includes('return_to_sender')) {
+      effectiveBulletStyle = 'boomerang';
+    }
+    
     // Apply special abilities based on character type
-    switch (config.bulletStyle) {
+    switch (effectiveBulletStyle) {
       case 'boomerang':
         ;(projectile as any).isBoomerang = true
         ;(projectile as any).originalShooter = shooterId
@@ -558,7 +603,18 @@ export function fireProjectile(
     
     currentGame.world.entities.set(projectile.id, projectile)
     projectiles.push(projectile)
+    
+    console.log('🌍 Projectile added to world:', {
+      projectileId: projectile.id,
+      worldEntityCount: currentGame.world.entities.size,
+      projectileInWorld: currentGame.world.entities.has(projectile.id)
+    })
   }
+  
+  console.log('✅ fireProjectile completed:', {
+    projectilesCreated: projectiles.length,
+    returning: projectiles[0]?.id || null
+  })
   
   return projectiles[0] // Return first projectile for compatibility
 }
@@ -599,6 +655,13 @@ export function setArenaSize(width: number, height: number): void {
 export function addHazard(x: number, y: number, radius: number, damage: number): CircleEntity {
   if (!currentGame) throw new Error('No active game')
   
+  console.log('🚨 Creating hazard (RED CIRCLE):', {
+    position: { x, y },
+    radius,
+    damage,
+    timestamp: Date.now()
+  })
+  
   const hazard = createCircleEntity(
     `hazard_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     x,
@@ -612,6 +675,11 @@ export function addHazard(x: number, y: number, radius: number, damage: number):
   hazard.health = Infinity
   
   currentGame.world.entities.set(hazard.id, hazard)
+  
+  console.log('🌍 Hazard added to world:', {
+    hazardId: hazard.id,
+    worldEntityCount: currentGame.world.entities.size
+  })
   
   return hazard
 }
@@ -694,8 +762,18 @@ export function updateBotAI(botId: string): void {
   // Ensure attack range is properly set (fallback to config if not set)
   const attackRange = (bot as any).attackRange || config.attackRange || 300
   
-  // DO NOT modify velocity - let physics handle movement
-  // Characters should only change direction when bouncing off walls/entities
+  // Add basic movement AI - bots should move around the arena
+  // Only apply movement if not immobilized and velocity is low
+  if (!(bot as any).immobilized && Vector.magnitude(bot.velocity) < 50) {
+    // Add random movement to prevent stationary behavior
+    const moveSpeed = 150 + Math.random() * 100 // Random speed between 150-250
+    const moveAngle = Math.random() * 2 * Math.PI // Random direction
+    const moveForce = Vector.create(
+      Math.cos(moveAngle) * moveSpeed,
+      Math.sin(moveAngle) * moveSpeed
+    )
+    addForce(bot, moveForce)
+  }
   
   // Handle character-specific passive abilities that run independently of enemy detection
   if (characterType === 'frost') {
@@ -797,9 +875,20 @@ export function updateBotAI(botId: string): void {
     
     const normalizedDirection = Vector.normalize(directionToTarget)
     
-    // Fire with prediction
-    fireCharacterSpecificAttack(botId, normalizedDirection, characterType)
-    ;(bot as any).aiCooldown = now + (config.firingRate || 1000) // Ensure firing rate exists
+    // Decide whether to use special ability or primary attack
+    const shouldUseSpecial = Math.random() < 0.15 && nearestDistance < attackRange * 0.7; // 15% chance when enemy is close
+    
+    if (shouldUseSpecial) {
+      // Try to use special ability
+      fireCharacterSpecialAbility(botId, normalizedDirection, currentGame.world)
+        .catch(error => console.error('Error firing special ability:', error))
+      ;(bot as any).aiCooldown = now + (config.firingRate || 1000) * 1.5 // Longer cooldown after special
+    } else {
+      // Use primary attack
+      fireCharacterSpecificAttack(botId, normalizedDirection, characterType)
+        .catch(error => console.error('Error firing character attack:', error))
+      ;(bot as any).aiCooldown = now + (config.firingRate || 1000) // Ensure firing rate exists
+    }
   } else {
     // Occasionally shoot randomly when no enemies nearby
     if (Math.random() < 0.005) { // Reduced from 0.01 to prevent spam
@@ -809,6 +898,7 @@ export function updateBotAI(botId: string): void {
       )
       
       fireCharacterSpecificAttack(botId, Vector.normalize(randomDirection), characterType)
+        .catch(error => console.error('Error firing random character attack:', error))
       ;(bot as any).aiCooldown = now + (config.firingRate || 1000) * 3 // Longer cooldown for random shots
     }
   }
@@ -819,6 +909,14 @@ export function updateBotAI(botId: string): void {
 // Helper: Stun a target for a duration (ms)
 // Helper: Create an electric field at a position, damaging nearby enemies over time
 function createElectricField(position: Vector, opts: { radius: number, duration: number, damage: number, tickRate: number, sourceId: string }) {
+  console.log('⚡ Creating electric field (RED CIRCLE):', {
+    position,
+    radius: opts.radius,
+    duration: opts.duration,
+    damage: opts.damage,
+    sourceId: opts.sourceId
+  })
+  
   const fieldId = `electric_field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const field = createCircleEntity(fieldId, position.x, position.y, opts.radius, 'hazard');
   field.isStatic = true;
@@ -830,6 +928,11 @@ function createElectricField(position: Vector, opts: { radius: number, duration:
   (field as any).fieldDamage = opts.damage;
   (field as any).spawnTime = Date.now();
   currentGame?.world.entities.set(fieldId, field);
+  
+  console.log('🌍 Electric field added to world:', {
+    fieldId,
+    worldEntityCount: currentGame?.world.entities.size
+  })
 
   // Damage nearby enemies every tick
   const tick = () => {
@@ -896,14 +999,14 @@ function stunTarget(targetId: string, duration: number) {
 export { stunTarget };
 
 // Import the character system utilities
-import { fireCharacterAttack } from './characters/characterUtils';
+import { fireCharacterAttack, fireCharacterSpecialAbility } from './characters/characterUtils';
 
-function fireCharacterSpecificAttack(botId: string, direction: Vector, characterType: string): void {
+async function fireCharacterSpecificAttack(botId: string, direction: Vector, characterType: string): Promise<void> {
   if (!currentGame) return;
   
   try {
     // Use the new character system
-    fireCharacterAttack(botId, direction, currentGame.world);
+    await fireCharacterAttack(botId, direction, currentGame.world);
   } catch (error) {
     console.error(`Error in character attack system:`, error);
     // Fallback to old implementation if needed

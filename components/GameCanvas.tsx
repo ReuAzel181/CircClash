@@ -112,8 +112,6 @@ export default function GameCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width, height })
-  const [keys, setKeys] = useState<Set<string>>(new Set())
-  const [mousePos, setMousePos] = useState<Vector>({ x: 0, y: 0 })
   // local pause state as a fallback if parent doesn't control pause
   const [localPaused, setLocalPaused] = useState(false)
   const isPaused = typeof paused === 'boolean' ? paused : localPaused
@@ -124,83 +122,9 @@ export default function GameCanvas({
     setCanvasSize({ width, height })
   }, [width, height])
 
-  // Mouse position tracking for aiming
-  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    // Calculate mouse position relative to canvas without scaling
-    const x = (event.clientX - rect.left) * (canvasSize.width / rect.width)
-    const y = (event.clientY - rect.top) * (canvasSize.height / rect.height)
-    
-    setMousePos({ x, y })
-  }, [canvasSize])
+  // Mouse and keyboard input handlers removed for autonomous gameplay
 
-  // Mouse click for shooting
-  const handleMouseClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-  if (isPaused) return
-    if (!playerId) return
-    
-    const game = getCurrentGame()
-    if (!game) return
-    
-    const player = game.world.entities.get(playerId)
-    if (!player) return
-    
-    const direction = Vector.subtract(mousePos, player.position)
-    fireProjectile(playerId, direction)
-  }, [playerId, mousePos])
-
-  // Keyboard input handling
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Toggle pause with 'P' and avoid adding it to movement keys
-        if (event.code === 'KeyP') {
-          // delegate to parent if provided, otherwise toggle local state
-          if (typeof onPauseChange === 'function') {
-            onPauseChange(!isPaused)
-          } else {
-            setLocalPaused(p => !p)
-          }
-          return
-        }
-      setKeys(prev => new Set(prev).add(event.code))
-    }
-    
-    const handleKeyUp = (event: KeyboardEvent) => {
-      setKeys(prev => {
-        const newKeys = new Set(prev)
-        newKeys.delete(event.code)
-        return newKeys
-      })
-    }
-    
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-    }
-  }, [])
-
-  // Handle player movement based on input
-  useEffect(() => {
-  if (isPaused) return
-  if (!playerId || keys.size === 0) return
-    
-    const moveDirection = Vector.create()
-    
-    if (keys.has('KeyW') || keys.has('ArrowUp')) moveDirection.y -= 1
-    if (keys.has('KeyS') || keys.has('ArrowDown')) moveDirection.y += 1
-    if (keys.has('KeyA') || keys.has('ArrowLeft')) moveDirection.x -= 1
-    if (keys.has('KeyD') || keys.has('ArrowRight')) moveDirection.x += 1
-    
-    if (moveDirection.x !== 0 || moveDirection.y !== 0) {
-      movePlayer(playerId, moveDirection, 500)
-    }
-  }, [keys, playerId])
+  // Keyboard input and player movement removed for autonomous gameplay
 
   // Main render loop
   const render = useCallback(() => {
@@ -255,26 +179,18 @@ export default function GameCanvas({
     // First pass: Draw all projectiles (including ice walls) in the background
     entities.forEach(entity => {
       if (entity.type === 'projectile') {
-        drawEntity(ctx, entity, 1, playerId, theme)
+        drawEntity(ctx, entity, 1, theme)
       }
     })
     
     // Second pass: Draw all players and other entities in the foreground
     entities.forEach(entity => {
       if (entity.type !== 'projectile') {
-        drawEntity(ctx, entity, 1, playerId, theme)
+        drawEntity(ctx, entity, 1, theme)
       }
     })
     
-    // Draw UI overlays
-    if (playerId) {
-      drawPlayerUI(ctx, game, playerId, canvas.width, canvas.height)
-    }
-    
-    // Draw crosshair for aiming
-    if (playerId && mousePos) {
-      drawCrosshair(ctx, mousePos.x, mousePos.y)
-    }
+    // UI overlays removed for autonomous gameplay
     
     // Notify parent of game state changes
     if (onGameStateChange) {
@@ -283,7 +199,7 @@ export default function GameCanvas({
     
     // Continue animation loop
     animationFrameRef.current = requestAnimationFrame(render)
-  }, [playerId, mousePos, onGameStateChange])
+  }, [playerId, onGameStateChange])
 
   // Start render loop
   useEffect(() => {
@@ -306,24 +222,13 @@ export default function GameCanvas({
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        onMouseMove={handleMouseMove}
-        onClick={handleMouseClick}
-        className="border border-gray-300 cursor-crosshair bg-white w-full h-full"
+        className="border border-gray-300 bg-white w-full h-full"
         style={{ 
           objectFit: 'contain',
           imageRendering: 'pixelated',
           display: 'block'
         }}
       />
-      
-      {/* Control instructions */}
-      {playerId && (
-        <div className="absolute bottom-4 left-4 bg-white bg-opacity-90 text-gray-800 text-sm p-3 rounded-lg shadow-sm border">
-          <div className="font-medium mb-1">Controls:</div>
-          <div>WASD/Arrow Keys: Move</div>
-          <div>Mouse: Aim & Click to Shoot</div>
-        </div>
-      )}
     </div>
   )
 }
@@ -362,12 +267,11 @@ function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, 
   ctx.globalAlpha = 1
 }
 
-function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: number, playerId?: string, theme: 'dark' | 'light' | 'sunset' | 'ocean' | 'forest' = 'dark'): void {
+function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: number, theme: 'dark' | 'light' | 'sunset' | 'ocean' | 'forest' = 'dark'): void {
   const x = entity.position.x * scale
   const y = entity.position.y * scale
   // Drawn radius uses a visual scale to make arena feel larger without changing physics
   const radius = entity.radius * scale * CHARACTER_SCALE
-  const isCurrentPlayer = entity.id === playerId
   
   // Get theme colors for consistent styling
   const themeColors = getThemeColors(theme)
@@ -392,15 +296,15 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
   // Draw weapon if visible
   if (((entity as any).showWeapon === true) && ((entity as any).weaponState?.visible === true)) {
     const characterType = getCharacterType(entity.id)
-    const config = getCharacterConfigSync(characterType)
+    const weaponConfig = getCharacterConfigSync(characterType)
     
     ctx.save()
     ctx.translate(x, y)
     
     // Draw weapon with swing animation if active
     if ((entity as any).weaponState?.swinging) {
-      const swingProgress = ((Date.now() - (((entity as any).weaponState.swingStartTime as number) || Date.now())) % (config.primaryAttack?.swingDuration || 400)) / (config.primaryAttack?.swingDuration || 400)
-      const swingAngle = ((config.primaryAttack?.swingAngle || 120) * Math.PI / 180) * Math.sin(swingProgress * Math.PI)
+      const swingProgress = ((Date.now() - (((entity as any).weaponState.swingStartTime as number) || Date.now())) % (weaponConfig.primaryAttack?.swingDuration || 400)) / (weaponConfig.primaryAttack?.swingDuration || 400)
+      const swingAngle = ((weaponConfig.primaryAttack?.swingAngle || 120) * Math.PI / 180) * Math.sin(swingProgress * Math.PI)
       ctx.rotate(swingAngle)
     }
     
@@ -410,7 +314,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
     ctx.lineTo(radius * 1.5, 0)
     ctx.lineTo(0, radius * 0.5)
     ctx.closePath()
-    ctx.fillStyle = config.color
+    ctx.fillStyle = weaponConfig.color
     ctx.globalAlpha = 0.8
     ctx.fill()
     ctx.restore()
@@ -423,20 +327,13 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       ctx.beginPath()
       ctx.arc(x, y, radius, 0, 2 * Math.PI)
       
-      // Color based on character type for bots, otherwise health and player status
-      const isCurrentPlayer = entity.id === playerId
+      // Color based on character type for autonomous entities
       const healthPercent = entity.health / entity.maxHealth
       
-      if (isCurrentPlayer) {
-        ctx.fillStyle = '#3b82f6' // blue-500
-      } else if ((entity as any).isBot) {
-        // Character-specific colors for bots (same as their bullets)
-        const characterType = getCharacterType(entity.id)
-        const config = getCharacterConfigSync(characterType)
-        ctx.fillStyle = config.color
-      } else {
-        ctx.fillStyle = '#10b981' // green-500
-      }
+      // Character-specific colors for all entities (autonomous gameplay)
+      const characterType = getCharacterType(entity.id)
+      const entityConfig = getCharacterConfigSync(characterType)
+      ctx.fillStyle = entityConfig.color
       
       // Dim color based on health
       ctx.globalAlpha = 0.3 + (healthPercent * 0.7)
@@ -448,20 +345,10 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       // Map defense value (40-100 range) to stroke thickness (3-10 pixels) - increased for visibility
       const shieldThickness = Math.max(3, Math.min(10, 3 + ((defenseValue - 40) / 60) * 7))
       
-      // Use character-specific color for stroke, or blue for current player
-      if (isCurrentPlayer) {
-        ctx.strokeStyle = '#3b82f6' // Keep blue for current player
-        ctx.shadowColor = '#3b82f6'
-        ctx.shadowBlur = 8
-      } else if ((entity as any).isBot) {
-        ctx.strokeStyle = getCharacterColor(entity.id)
-        ctx.shadowColor = getCharacterColor(entity.id)
-        ctx.shadowBlur = 6
-      } else {
-        ctx.strokeStyle = themeColors.entityOutline // Theme-appropriate outline color
-        ctx.shadowColor = themeColors.entityOutline
-        ctx.shadowBlur = 4
-      }
+      // Use character-specific color for stroke (autonomous gameplay)
+      ctx.strokeStyle = getCharacterColor(entity.id)
+      ctx.shadowColor = getCharacterColor(entity.id)
+      ctx.shadowBlur = 6
       
       ctx.lineWidth = shieldThickness
       ctx.stroke()
@@ -783,28 +670,20 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       ctx.fillText(Math.round(entity.health).toString(), x, y)
       ctx.shadowBlur = 0
       
-      // Player indicator
-      if (isCurrentPlayer) {
-        ctx.fillStyle = themeColors.text
-        ctx.font = `${Math.max(8, radius * 0.18)}px Arial`
-        ctx.strokeStyle = themeColors.background
-        ctx.lineWidth = 2
-        ctx.strokeText('YOU', x, y + radius + 15)
-        ctx.fillText('YOU', x, y + radius + 15)
-      }
+      // Removed player indicator for autonomous gameplay
       break
       
     case 'projectile':
       // Get character-specific bullet styling
       const projectile = entity as any
-      const characterType = projectile.characterType || 'default'
-      const config = getCharacterConfigSync(characterType)
+      const projectileCharacterType = projectile.characterType || 'default'
+      const projectileConfig = getCharacterConfigSync(projectileCharacterType)
       
       ctx.save()
       
       // Apply glow effect if character has it
-      if (config.glowEffect && characterType !== 'default') {
-        ctx.shadowColor = config.bulletColor
+      if (projectileConfig.glowEffect && projectileCharacterType !== 'default') {
+        ctx.shadowColor = projectileConfig.bulletColor
         ctx.shadowBlur = 6 // Reduced from 15 to 6 for subtler glow
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
@@ -852,7 +731,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       }
       
       // Draw bullet based on character's bullet shape
-      if (characterType === 'default') {
+      if (projectileCharacterType === 'default') {
         // Default bullet style
         ctx.beginPath()
         ctx.arc(x, y, radius, 0, 2 * Math.PI)
@@ -863,12 +742,12 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
         ctx.stroke()
       } else {
         // Character-specific bullet shapes
-        ctx.fillStyle = config.bulletColor
+        ctx.fillStyle = projectileConfig.bulletColor
         ctx.strokeStyle = '#ffffff'
         ctx.lineWidth = 1
         
         // Use projectile's shape if available, otherwise use character's bulletShape
-        const projectileShape = (projectile as any).shape || config.bulletShape
+        const projectileShape = (projectile as any).shape || projectileConfig.bulletShape
         
         switch (projectileShape) {
           case 'thunder': // Lightning Striker - enhanced jagged lightning
@@ -945,8 +824,8 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
     
     // Get character-specific config for electric effects
     const characterType = getCharacterType(entity.id);
-    const config = getCharacterConfigSync(characterType);
-    const electricColor = config.electricColor || '#4f46e5';
+    const electricConfig = getCharacterConfigSync(characterType);
+    const electricColor = electricConfig.electricColor || '#4f46e5';
     
     // Draw multiple pulsing circles for enhanced electric effect
     const time = Date.now() * 0.01;
@@ -1067,9 +946,9 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             ctx.fill()
             
             // Draw spinning effect
-            if (config.bulletStyle === 'spinning') {
+            if (projectileConfig.bulletStyle === 'spinning') {
               const time = Date.now() * 0.01
-              ctx.strokeStyle = config.bulletColor
+              ctx.strokeStyle = projectileConfig.bulletColor
               ctx.lineWidth = 2
               for (let i = 0; i < 3; i++) {
                 const angle = time + (i * Math.PI * 2 / 3)
@@ -1186,7 +1065,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             ctx.beginPath()
             ctx.arc(x, y, radius, 0, Math.PI, false)
             ctx.lineWidth = radius * 0.8
-            ctx.strokeStyle = config.bulletColor
+            ctx.strokeStyle = projectileConfig.bulletColor
             ctx.stroke()
             
             // Add energy effect
@@ -1244,7 +1123,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
               ctx.stroke()
               
               // Add glowing core
-              ctx.strokeStyle = config.bulletColor
+              ctx.strokeStyle = projectileConfig.bulletColor
               ctx.lineWidth = Math.max(2, radius * 0.3)
               ctx.globalAlpha = 0.8
               ctx.beginPath()
@@ -1462,7 +1341,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
               const waveAlpha = Math.max(0.3, 1.0 - (growthFactor - 1) * 0.3)
               
               // Different colors for desperate mode
-              const waveColor = isDesperate ? '#ef4444' : config.bulletColor
+              const waveColor = isDesperate ? '#ef4444' : projectileConfig.bulletColor
               const coreColor = isDesperate ? '#fca5a5' : '#ffffff'
               
               // Outer energy ring
@@ -1712,7 +1591,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
           case 'circle': // Default circle, special handling for shockwave and earthquake
             if (projectile.isShockwave) {
               // Draw expanding shockwave (Steel Guardian)
-              ctx.strokeStyle = config.bulletColor
+              ctx.strokeStyle = projectileConfig.bulletColor
               ctx.lineWidth = 3
               ctx.globalAlpha = 0.7
               
@@ -1745,7 +1624,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             } else if (projectile.isEarthquake) {
               // Draw expanding earthquake (Iron Titan)
               const waveNumber = projectile.waveNumber || 1
-              ctx.strokeStyle = config.bulletColor
+              ctx.strokeStyle = projectileConfig.bulletColor
               ctx.lineWidth = 4 + waveNumber // Thicker lines for later waves
               ctx.globalAlpha = 0.8
               
@@ -1801,7 +1680,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             // Draw wavy thread
             ctx.beginPath()
             ctx.lineWidth = radius * 0.8
-            ctx.strokeStyle = config.bulletColor
+            ctx.strokeStyle = projectileConfig.bulletColor
             
             const waveLength = radius * 4
             const amplitude = radius * 0.5
@@ -1834,7 +1713,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
             ctx.fill()
             
             // Add flame effect for fire character
-            if (config.bulletStyle === 'flame') {
+            if (projectileConfig.bulletStyle === 'flame') {
               ctx.strokeStyle = '#ff6b35'
               ctx.lineWidth = 2
               ctx.globalAlpha = 0.6
@@ -1977,7 +1856,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       
       // Enhanced trail effect based on character
       const projectileVelocity = Vector.magnitude(entity.velocity)
-      if (projectileVelocity > 100 && (characterType === 'default' || config.trailEffect)) {
+      if (projectileVelocity > 100 && (projectileCharacterType === 'default' || projectileConfig.trailEffect)) {
         const trailLength = Math.min(projectileVelocity * 0.15, 25) * scale
         const direction = Vector.normalize(Vector.multiply(entity.velocity, -1))
         const trailEnd = Vector.add(entity.position, Vector.multiply(direction, trailLength / scale))
@@ -1988,11 +1867,11 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
         ctx.lineTo(trailEnd.x * scale, trailEnd.y * scale)
         
         // Character-specific trail effects
-        if (characterType === 'striker') {
+        if (projectileCharacterType === 'striker') {
           // Enhanced electric trail with crackling effect and multiple segments
-          ctx.strokeStyle = config.electricColor || '#fbbf24';
+          ctx.strokeStyle = projectileConfig.electricColor || '#fbbf24';
           ctx.lineWidth = Math.max(3, radius * 1.2);
-          ctx.shadowColor = config.electricColor || '#fbbf24';
+          ctx.shadowColor = projectileConfig.electricColor || '#fbbf24';
           ctx.shadowBlur = 8;
           ctx.globalAlpha = 0.9;
           
@@ -2011,7 +1890,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
           }
           
           // Add electric sparks along the trail
-          if (config.electricParticles) {
+          if (projectileConfig.electricParticles) {
             for (let i = 0; i < 5; i++) {
               const sparkX = x + (trailEnd.x * scale - x) * (i / 5) + (Math.random() - 0.5) * 10;
               const sparkY = y + (trailEnd.y * scale - y) * (i / 5) + (Math.random() - 0.5) * 10;
@@ -2019,53 +1898,53 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
               
               ctx.beginPath();
               ctx.arc(sparkX, sparkY, sparkSize, 0, 2 * Math.PI);
-              ctx.fillStyle = config.electricColor || '#fbbf24';
+              ctx.fillStyle = projectileConfig.electricColor || '#fbbf24';
               ctx.globalAlpha = 0.7;
               ctx.fill();
             }
           }
           ctx.globalAlpha = 0.9;
-        } else if (characterType === 'vortex' && config.bulletStyle === 'spinning') {
+        } else if (projectileCharacterType === 'vortex' && projectileConfig.bulletStyle === 'spinning') {
           // Spiral trail
-          ctx.strokeStyle = config.bulletColor
+          ctx.strokeStyle = projectileConfig.bulletColor
           ctx.lineWidth = Math.max(2, radius * 0.6)
-          ctx.shadowColor = config.bulletColor
+          ctx.shadowColor = projectileConfig.bulletColor
           ctx.shadowBlur = 3 // Reduced from 8 to 3
           ctx.globalAlpha = 0.7
-        } else if (characterType === 'flame' && config.bulletStyle === 'flame') {
+        } else if (projectileCharacterType === 'flame' && projectileConfig.bulletStyle === 'flame') {
           // Fire trail
           ctx.strokeStyle = '#ff6b35'
           ctx.lineWidth = Math.max(3, radius * 0.9)
           ctx.shadowColor = '#ff6b35'
           ctx.shadowBlur = 5 // Reduced from 12 to 5
           ctx.globalAlpha = 0.6
-        } else if (characterType === 'shadow' && config.bulletStyle === 'shadow') {
+        } else if (projectileCharacterType === 'shadow' && projectileConfig.bulletStyle === 'shadow') {
           // Dark shadow trail
           ctx.strokeStyle = '#1f2937'
           ctx.lineWidth = Math.max(2, radius * 0.7)
           ctx.globalAlpha = 0.5
-        } else if (characterType === 'archer' && config.bulletStyle === 'piercing') {
+        } else if (projectileCharacterType === 'archer' && projectileConfig.bulletStyle === 'piercing') {
           // Wind trail
           ctx.strokeStyle = '#10b981'
           ctx.lineWidth = Math.max(2, radius * 0.5)
           ctx.shadowColor = '#10b981'
           ctx.shadowBlur = 3
           ctx.globalAlpha = 0.8
-        } else if (characterType === 'samurai' && config.bulletStyle === 'slashing') {
+        } else if (projectileCharacterType === 'samurai' && projectileConfig.bulletStyle === 'slashing') {
           // Energy slash trail
           ctx.strokeStyle = '#7c3aed'
           ctx.lineWidth = Math.max(4, radius * 1.0)
           ctx.shadowColor = '#7c3aed'
           ctx.shadowBlur = 6
           ctx.globalAlpha = 0.7
-        } else if (characterType === 'sniper' && config.bulletStyle === 'piercing') {
+        } else if (projectileCharacterType === 'sniper' && projectileConfig.bulletStyle === 'piercing') {
           // Void trail
           ctx.strokeStyle = '#0f172a'
           ctx.lineWidth = Math.max(1, radius * 0.3)
           ctx.shadowColor = '#8b5cf6'
           ctx.shadowBlur = 4
           ctx.globalAlpha = 0.9
-        } else if (characterType === 'bomber' && config.bulletStyle === 'explosive') {
+        } else if (projectileCharacterType === 'bomber' && projectileConfig.bulletStyle === 'explosive') {
           // Explosive trail with sparks
           ctx.strokeStyle = '#f97316'
           ctx.lineWidth = Math.max(3, radius * 0.8)
@@ -2074,8 +1953,8 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
           ctx.globalAlpha = 0.6
         } else {
           // Default trail
-          ctx.strokeStyle = characterType === 'default' ? '#fbbf24' : config.bulletColor
-          ctx.lineWidth = Math.max(2, radius * 0.5)
+          ctx.strokeStyle = projectileCharacterType === 'default' ? '#fbbf24' : projectileConfig.bulletColor;
+          ctx.lineWidth = Math.max(2, radius * 0.5);
           ctx.globalAlpha = 0.7
         }
         

@@ -17,6 +17,10 @@ export interface Weapon {
   piercing?: number
   bounces?: number
   lifetime?: number
+  ballisticCoefficient?: number
+  muzzleVelocity?: number
+  projectileMass?: number
+  explosiveRadius?: number
   // Dash-specific
   dashDistance?: number
   dashDuration?: number
@@ -32,16 +36,18 @@ export const weapons: Weapon[] = [
     type: 'projectile',
     baseDamage: 25,
     cooldownMs: 800,
-    projectileSpeed: 300,
-    radius: 6,
-    special: ['spinning', 'momentum_damage'],
+    projectileSpeed: 450, // Increased for more realistic bullet velocity
+    radius: 4, // Smaller, more realistic bullet size
+    special: ['spinning', 'momentum_damage', 'ballistic_trajectory'],
     cost: 10,
     rarity: 'common',
-    description: 'A spinning projectile that gains damage with velocity',
+    description: 'A spinning projectile with realistic ballistic trajectory',
     icon: '🌀',
     piercing: 0,
     bounces: 0,
-    lifetime: 2000
+    lifetime: 3000, // Longer lifetime for ballistic arc
+    ballisticCoefficient: 0.4, // Good aerodynamics
+    muzzleVelocity: 450
   },
   {
     id: 'drillspin',
@@ -49,16 +55,19 @@ export const weapons: Weapon[] = [
     type: 'projectile',
     baseDamage: 35,
     cooldownMs: 1200,
-    projectileSpeed: 250,
-    radius: 8,
-    special: ['piercing', 'momentum_damage', 'chain_knockback'],
+    projectileSpeed: 380, // Heavy projectile with moderate velocity
+    radius: 6, // Reduced size for realism
+    special: ['piercing', 'momentum_damage', 'chain_knockback', 'heavy_projectile'],
     cost: 20,
     rarity: 'rare',
-    description: 'Pierces through enemies and gains power from momentum',
+    description: 'Heavy piercing projectile with realistic ballistic drop',
     icon: '🔩',
     piercing: 2,
     bounces: 0,
-    lifetime: 3000
+    lifetime: 4000,
+    ballisticCoefficient: 0.6, // Excellent aerodynamics for piercing
+    muzzleVelocity: 380,
+    projectileMass: 1.5 // Heavier projectile
   },
   {
     id: 'boomring',
@@ -66,18 +75,21 @@ export const weapons: Weapon[] = [
     type: 'projectile',
     baseDamage: 40,
     cooldownMs: 1500,
-    projectileSpeed: 400,
-    radius: 10,
-    special: ['bouncing', 'explosion_on_impact', 'return_to_sender'],
+    projectileSpeed: 520, // High velocity explosive projectile
+    radius: 8, // Reduced for realism
+    special: ['bouncing', 'explosion_on_impact', 'return_to_sender', 'high_velocity'],
     cost: 25,
     rarity: 'epic',
-    description: 'Bounces off walls and explodes on impact, then returns',
+    description: 'High-velocity explosive with realistic ballistic trajectory',
     icon: '💥',
     piercing: 0,
     bounces: 3,
-    lifetime: 4000
-  },
-  {
+    lifetime: 5000,
+     ballisticCoefficient: 0.35, // Lower due to explosive payload
+     muzzleVelocity: 520,
+     explosiveRadius: 25
+   },
+   {
     id: 'magnetron',
     name: 'Magnetron',
     type: 'aura',

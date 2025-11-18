@@ -422,10 +422,10 @@ export class Archer extends BaseCharacter {
       entity.velocity = Vector.multiply(aiDecision.moveDirection, (entity as any).speed || 200);
     }
     if (aiDecision.attackDirection && !(this.primaryAttack as BaseAbility).isOnCooldown()) {
-      this.primaryAttack.execute(entity.id, aiDecision.attackDirection, (entity as any).world);
+      this.primaryAttack.execute(entity.id, aiDecision.attackDirection, world);
     }
     if (aiDecision.useSpecial && this.specialAbility && !(this.specialAbility as BaseAbility).isOnCooldown() && aiDecision.attackDirection) {
-      this.specialAbility.execute(entity.id, aiDecision.attackDirection, (entity as any).world);
+      this.specialAbility.execute(entity.id, aiDecision.attackDirection, world);
     }
   }
 

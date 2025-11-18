@@ -62,11 +62,7 @@ export class MineFieldAttack extends BaseAbility {
 export function chaosMineProjectileBehavior(projectile: CircleEntity, world: PhysicsWorld, deltaTime: number): void {
   const mineProps = projectile as any;
   
-  // If not yet a mine, move normally
-  if (!mineProps.isMine || !mineProps.armed) {
-    projectile.position.x += projectile.velocity.x * deltaTime;
-    projectile.position.y += projectile.velocity.y * deltaTime;
-  }
+  // Physics integration handles movement - no manual position update needed
 
   // Check for proximity detonation if mine is armed
   if (mineProps.isMine && mineProps.armed) {
