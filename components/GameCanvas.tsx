@@ -97,6 +97,7 @@ interface GameCanvasProps {
   paused?: boolean
   onPauseChange?: (paused: boolean) => void
   theme?: 'dark' | 'light' | 'sunset' | 'ocean' | 'forest'
+  immersive?: boolean
 }
 
 export default function GameCanvas({ 
@@ -107,7 +108,8 @@ export default function GameCanvas({
   onGameStateChange,
   paused,
   onPauseChange,
-  theme = 'dark'
+  theme = 'dark',
+  immersive = false
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -215,14 +217,14 @@ export default function GameCanvas({
   return (
     <div 
       ref={containerRef}
-      className={`relative bg-gray-100 rounded-lg overflow-hidden w-full h-full ${className}`}
+      className={`relative ${immersive ? '' : 'bg-gray-100 rounded-lg'} overflow-hidden w-full h-full ${className}`}
     >
   {/* Pause is now controlled by parent; in-canvas toggle removed */}
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        className="border border-gray-300 bg-white w-full h-full"
+        className={`${immersive ? '' : 'border border-gray-300 bg-white'} w-full h-full`}
         style={{ 
           objectFit: 'contain',
           imageRendering: 'pixelated',

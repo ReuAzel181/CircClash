@@ -211,6 +211,7 @@ export function createProjectile(
       }
     }
   };
+  ;(projectile as any).spawnTime = Date.now();
   
   // Call character-specific creation behavior
   const characterSystem = new CharacterSystem(new CharacterFactory());

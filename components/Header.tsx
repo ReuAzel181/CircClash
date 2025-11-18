@@ -8,6 +8,7 @@ import { Menu, X, Zap } from 'lucide-react'
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
+  if (pathname.startsWith('/quickplay')) return null
 
   const navigation = [
     { name: 'Home', href: '/' },

@@ -185,8 +185,8 @@ export const Vector = {
   }),
   
   multiply: (v: Vector, scalar: number): Vector => ({
-    x: v.x * scalar,
-    y: v.y * scalar
+    x: (v && typeof (v as any).x === 'number' ? (v as any).x : 0) * scalar,
+    y: (v && typeof (v as any).y === 'number' ? (v as any).y : 0) * scalar
   }),
   
   dot: (a: Vector, b: Vector): number => a.x * b.x + a.y * b.y,

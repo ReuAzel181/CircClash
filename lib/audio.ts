@@ -48,6 +48,20 @@ export function toggleSound(enabled: boolean): void {
   isSoundEnabled = enabled;
 }
 
+export function shutdownAudio(): void {
+  try {
+    isSoundEnabled = false;
+    if (audioContext) {
+      const state = audioContext.state;
+      if (state === 'running') {
+        audioContext.suspend().catch(() => {});
+      }
+      audioContext.close().catch(() => {});
+      audioContext = null;
+    }
+  } catch {}
+}
+
 // Create oscillator-based sounds for different effects
 function loadSounds(): void {
   if (!audioContext) return;

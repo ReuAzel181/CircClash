@@ -29,7 +29,7 @@ export class MineFieldAttack extends BaseAbility {
         projectileSpeed: chaosConfig.projectileSpeed,
         radius: chaosConfig.bulletRadius,
         lifetime: chaosConfig.projectileLifetime,
-        characterType: 'bomber'
+        characterType: 'chaos'
       }
     );
 
@@ -308,7 +308,7 @@ export default class Chaos extends BaseCharacter {
   private ai: ChaosAI;
 
   constructor() {
-    super('bomber');
+    super('chaos');
     this.primaryAttack = new MineFieldAttack();
     this.ai = new ChaosAI();
     

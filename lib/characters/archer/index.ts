@@ -462,5 +462,4 @@ export class Archer extends BaseCharacter {
   }
 }
 
-// Export default instance
-export default new Archer();
+export default Archer;

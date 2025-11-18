@@ -191,6 +191,7 @@ export default function QuickPlayPage() {
   const [arenaTheme, setArenaTheme] = useState<'dark' | 'light' | 'sunset' | 'ocean' | 'forest'>('dark')
   const [showBattleSettings, setShowBattleSettings] = useState(true)
   const [paused, setPaused] = useState(false)
+  const immersive = gameState === 'playing' || gameState === 'paused'
   
   // Calculate optimal arena size based on screen
   useEffect(() => {
@@ -198,19 +199,18 @@ export default function QuickPlayPage() {
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
       
-      // Reserve more vertical space for headers/toolbars and OS taskbars
-      const headerHeight = 140 // increased to ensure arena doesn't grow too tall
-      const footerHeight = 80  // increased to account for OS taskbar or overlays
-      const padding = 24
-      const sidebarWidth = showBattleSettings ? 224 : 0 // Stats panel width (56 * 4 = 224px)
+      const headerHeight = immersive ? 0 : 140
+      const footerHeight = immersive ? 0 : 80
+      const padding = immersive ? 0 : 24
+      const sidebarWidth = immersive ? 0 : (showBattleSettings ? 224 : 0)
       
       // Calculate available space
       const availableWidth = Math.max(400, viewportWidth - sidebarWidth - padding * 2)
       const availableHeight = Math.max(240, viewportHeight - headerHeight - footerHeight - padding * 2)
       
       // Use more conservative max heights so arena always fits and has breathing room
-      const width = Math.min(availableWidth, showBattleSettings ? 800 : 1200)
-      const height = Math.min(availableHeight, showBattleSettings ? 310 : 470) // Added 10px to both values
+      const width = immersive ? viewportWidth : Math.min(availableWidth, showBattleSettings ? 800 : 1200)
+      const height = immersive ? viewportHeight : Math.min(availableHeight, showBattleSettings ? 310 : 470)
       
       setArenaSize({ width, height })
     }
@@ -218,7 +218,7 @@ export default function QuickPlayPage() {
     updateArenaSize()
     window.addEventListener('resize', updateArenaSize)
     return () => window.removeEventListener('resize', updateArenaSize)
-  }, [showBattleSettings])
+  }, [showBattleSettings, immersive])
   
   // Handle arena resize during active games - reposition characters adaptively
   useEffect(() => {
@@ -271,6 +271,16 @@ export default function QuickPlayPage() {
     window.addEventListener('gameOver', handleGameOver)
     return () => window.removeEventListener('gameOver', handleGameOver)
   }, [editingStats])
+
+  useEffect(() => {
+    return () => {
+      try {
+        stopGame()
+        const { shutdownAudio } = require('../../lib/audio')
+        shutdownAudio()
+      } catch {}
+    }
+  }, [])
 
   const handleStartGame = () => {
     initializeGame()
@@ -346,6 +356,7 @@ export default function QuickPlayPage() {
     initializeGame()
     applyAllStatsToGame() // Apply stats before starting
     resumeGame() // Start the game immediately
+    setShowBattleSettings(false)
     setGameState('playing')
     setGameStats({ time: 0, eliminations: 0 })
     setGameStartTime(Date.now())
@@ -361,6 +372,7 @@ export default function QuickPlayPage() {
   const handleResumeGame = () => {
     applyAllStatsToGame() // Apply all current stat changes before resuming
     resumeGame()
+    setShowBattleSettings(false)
     setGameState('playing')
   setPaused(false)
   }
@@ -522,7 +534,7 @@ export default function QuickPlayPage() {
   }, [globalHealthMultiplier])
 
   return (
-  <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden pb-24">
+  <div className={`${immersive ? 'min-h-dvh h-dvh w-screen bg-black flex flex-col overflow-hidden' : 'min-h-dvh h-dvh w-screen bg-gray-50 flex flex-col overflow-hidden'}`}>
       {/* Game Area */}
       <div className="flex-1 flex flex-col justify-between">
         <div className="h-full flex flex-col">
@@ -530,12 +542,12 @@ export default function QuickPlayPage() {
           {gameState === 'setup' && (
             <>
               <motion.div 
-                className="bg-white rounded-xl shadow-sm border p-3 mb-3"
+                className="bg-white rounded-none shadow-none border-0"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
                 {/* Tekken Style Character Selection */}
-                <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 rounded-none p-0 mb-16 relative overflow-hidden shadow-2xl min-h-[calc(100vh-200px)] w-full">
+                <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 rounded-none p-0 relative overflow-hidden shadow-2xl min-h-dvh h-dvh w-full">
                   {/* Tekken-style atmospheric background */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-purple-900/60 to-red-900/40"></div>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(59,130,246,0.3),transparent_50%)]"></div>
@@ -590,12 +602,10 @@ export default function QuickPlayPage() {
                   </div>
 
                   {/* Main Layout - Tekken Style */}
-                  <div className="grid grid-cols-12 gap-0 relative z-10 min-h-[calc(100vh-320px)] w-full mb-12">
-                    {/* Bottom clamp to prevent content from touching the bottom */}
-                    <div style={{position: 'absolute', left: 0, right: 0, bottom: '50px', height: '500px', pointerEvents: 'none', zIndex: 20}}></div>
+                  <div className="grid grid-cols-12 gap-0 relative z-10 w-full h-full flex-1 min-h-0">
 
                     {/* Player 1 Side - Left */}
-                    <div className="col-span-3 relative min-h-[420px]">
+                    <div className="col-span-3 relative min-h-[420px] pb-20">
                       {selectedFighters[0] ? (
                         <motion.div 
                           className="relative h-full bg-gradient-to-br from-red-600/80 via-red-700/60 to-black/80 flex flex-col min-h-[580px]"
@@ -666,7 +676,7 @@ export default function QuickPlayPage() {
                     </div>
 
                     {/* Center - Character Grid */}
-                    <div className="col-span-6 bg-black/40 backdrop-blur-sm border-x border-blue-500/30 flex flex-col min-h-[420px]">
+                    <div className="col-span-6 bg-black/40 backdrop-blur-sm border-x border-blue-500/30 flex flex-col min-h-[420px] pb-4">
                       
                       {/* VS Display */}
                       <div className="text-center py-6 border-b border-blue-500/30">
@@ -687,7 +697,7 @@ export default function QuickPlayPage() {
                       </div>
 
                       {/* Character Selection Grid - Tekken style */}
-                      <div className="flex-1 p-4 overflow-y-auto min-h-0">
+                      <div className="flex flex-wrap justify-center items-center flex-1 p-4 overflow-y-auto min-h-0">
                         <div className="grid grid-cols-4 gap-2">
                           {characters.map((char, index) => {
                             const isSelected = selectedFighters.find(f => f.id === char.id)
@@ -762,7 +772,7 @@ export default function QuickPlayPage() {
                     </div>
 
                     {/* Player 2 Side - Right */}
-                    <div className="col-span-3 relative min-h-[420px]">
+                    <div className="col-span-3 relative min-h-[420px] pb-20">
                       {selectedFighters[1] ? (
                         <motion.div 
                           className="relative h-full bg-gradient-to-bl from-blue-600/80 via-blue-700/60 to-black/80 flex flex-col min-h-[580px]"
@@ -979,7 +989,7 @@ export default function QuickPlayPage() {
                     </div>
           
                   </div>
-                  <div className="flex-1 flex items-center justify-center relative p-4">
+                  <div className={`flex-1 flex items-center justify-center relative ${immersive ? 'p-0' : 'p-4'}`}>
                       <div className="w-full h-full box-border">
                       <GameCanvas
                         width={arenaSize.width}
@@ -989,6 +999,7 @@ export default function QuickPlayPage() {
                         onGameStateChange={() => {}}
                         theme={arenaTheme}
                         paused={paused}
+                        immersive={immersive}
                         onPauseChange={(p) => {
                           setPaused(p)
                           if (p) pauseGame()

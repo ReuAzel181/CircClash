@@ -1,7 +1,7 @@
 // Base character implementation with common functionality
 import { Vector, CircleEntity, PhysicsWorld } from '../physics';
 import { CharacterImplementation, CharacterAbility, ProjectileBehavior } from './characterInterface';
-import { getCharacterConfigSync } from '../characterConfig';
+import { getCharacterConfigSync, getCharacterType } from '../characterConfig';
 import { EntityUtils } from './characterUtils';
 
 // Base ability class that can be extended by specific abilities
@@ -148,7 +148,7 @@ export function createStandardProjectile(
     radius: config.bulletRadius,
     piercing: config.piercing,
     lifetime: config.projectileLifetime,
-    characterType: config.name?.toLowerCase() || entityId.split('_')[1] || 'default',
+    characterType: getCharacterType(owner.id),
     ...additionalProps
   });
 }

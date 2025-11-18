@@ -105,66 +105,6 @@ export default function HomePage() {
               </p>
             </div>
           </motion.div>
-
-          {/* Game Modes */}
-          <motion.div
-            className="bg-white rounded-3xl p-12 shadow-sm border border-gray-100"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-          >
-            <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Choose Your Battle</h2>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              <motion.div
-                className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 cursor-pointer hover:shadow-lg transition-all"
-                onClick={() => router.push('/quickplay')}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="bg-blue-500 text-white p-3 rounded-xl">
-                    <Zap className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Quick Battle</h3>
-                    <p className="text-blue-600 font-medium">Tekken-Style 1v1</p>
-                  </div>
-                </div>
-                <p className="text-gray-700 mb-4">
-                  Select 2 fighters for an epic duel. Customize stats and watch them battle for supremacy.
-                </p>
-                <div className="flex items-center gap-2 text-blue-600 font-medium">
-                  <Play className="w-4 h-4" />
-                  Start Quick Battle
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 cursor-pointer hover:shadow-lg transition-all"
-                onClick={() => router.push('/arena')}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="bg-purple-500 text-white p-3 rounded-xl">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Arena Mode</h3>
-                    <p className="text-purple-600 font-medium">Multiplayer Mayhem</p>
-                  </div>
-                </div>
-                <p className="text-gray-700 mb-4">
-                  Large-scale battles with multiple fighters, power-ups, and dynamic arena hazards.
-                </p>
-                <div className="flex items-center gap-2 text-purple-600 font-medium">
-                  <Users className="w-4 h-4" />
-                  Enter Arena
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
         </div>
 
         {/* Background decoration */}
@@ -173,19 +113,6 @@ export default function HomePage() {
         <div className="absolute bottom-40 left-20 text-5xl opacity-10 animate-pulse" style={{animationDelay: '2s'}}>🔥</div>
         <div className="absolute bottom-20 right-10 text-3xl opacity-10 animate-pulse" style={{animationDelay: '3s'}}>⚡</div>
       </div>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-2xl">⚔️</span>
-            <span className="text-xl font-bold">Tarag</span>
-          </div>
-          <p className="text-gray-400">
-            The ultimate AI battle arena experience
-          </p>
-        </div>
-      </footer>
     </div>
   )
 }

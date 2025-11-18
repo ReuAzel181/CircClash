@@ -1,7 +1,11 @@
+"use client"
 import Link from 'next/link'
 import { Zap, Github, Shield } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 
 export default function Footer() {
+  const pathname = usePathname()
+  if (pathname.startsWith('/quickplay')) return null
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
       <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
