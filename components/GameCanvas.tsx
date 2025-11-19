@@ -214,23 +214,50 @@ export default function GameCanvas({
     }
   }, [render])
 
+  // Ensure canvas fills its container by syncing to container size
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w > 0 && h > 0) setCanvasSize({ width: w, height: h })
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+    }
+  }, [])
+
   return (
     <div 
       ref={containerRef}
-      className={`relative ${immersive ? '' : 'bg-gray-100 rounded-lg'} overflow-hidden w-full h-full ${className}`}
+       className={`
+        relative 
+        flex-1 
+        min-h-0 
+        ${immersive ? '' : 'bg-gray-100 rounded-lg'} 
+        overflow-hidden 
+        w-full 
+        h-full 
+        ${className}
+      `}
     >
   {/* Pause is now controlled by parent; in-canvas toggle removed */}
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        className={`${immersive ? '' : 'border border-gray-300 bg-white'} w-full h-full`}
-        style={{ 
-          objectFit: 'contain',
-          imageRendering: 'pixelated',
-          display: 'block'
+        style={{
+          width: "100%",
+          height: "100%",
+          imageRendering: "pixelated",
+          display: "block"
         }}
       />
+
     </div>
   )
 }

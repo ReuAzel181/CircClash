@@ -372,7 +372,7 @@ export default function BattleRoyalePage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Game Area */}
       <div className="flex-1 p-3 overflow-hidden">
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col min-h-0">
           {/* Fighter Selection */}
           {gameState === 'setup' && (
             <>
@@ -563,7 +563,7 @@ export default function BattleRoyalePage() {
           {(gameState === 'playing' || gameState === 'paused' || gameState === 'ended') && (
             <div className="flex-1 flex gap-4 overflow-hidden">
               {/* Game Canvas - Left Side */}
-              <div className="flex-1 flex flex-col min-w-0 pb-2">
+              <div className="flex-1 flex flex-col min-w-0">
                 <div className="bg-white rounded-xl shadow-sm border flex flex-col h-full">
                   <div className="p-4 border-b flex-shrink-0">
                     <div className="flex justify-between items-center">
@@ -579,13 +579,14 @@ export default function BattleRoyalePage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex-1 flex items-center justify-center relative overflow-hidden">
-                    <GameCanvas
-                      width={arenaSize.width}
-                      height={arenaSize.height}
-                      playerId={undefined}
-                      onGameStateChange={() => {}}
-                    />
+                <div className="flex-1 relative overflow-hidden">
+                  <GameCanvas
+                    width={arenaSize.width}
+                    height={arenaSize.height}
+                    className="w-full h-full"
+                    playerId={undefined}
+                    onGameStateChange={() => {}}
+                  />
 
                     {/* Game Over Overlay */}
                     {gameState === 'ended' && (

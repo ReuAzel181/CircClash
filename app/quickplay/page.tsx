@@ -210,7 +210,7 @@ export default function QuickPlayPage() {
       
       // Use more conservative max heights so arena always fits and has breathing room
       const width = immersive ? viewportWidth : Math.min(availableWidth, showBattleSettings ? 800 : 1200)
-      const height = immersive ? viewportHeight : Math.min(availableHeight, showBattleSettings ? 310 : 470)
+      const height = Math.min(availableHeight, 470)
       
       setArenaSize({ width, height })
     }
@@ -532,10 +532,15 @@ export default function QuickPlayPage() {
   }, [globalHealthMultiplier])
 
   return (
-  <div className={`${immersive ? 'min-h-dvh h-dvh w-screen bg-black flex flex-col overflow-hidden' : 'min-h-dvh h-dvh w-screen bg-gray-50 flex flex-col overflow-hidden'}`}>
+    <div
+  className={`
+    min-h-dvh h-dvh w-screen flex flex-col overflow-hidden
+    ${immersive ? 'bg-black' : 'bg-gray-50'}
+    transition-all duration-300
+  `}>
       {/* Game Area */}
-      <div className="flex-1 flex flex-col justify-between">
-        <div className="h-full flex flex-col">
+      <div className="flex-1 flex flex-col justify-between min-h-0">
+        <div className="h-full flex flex-col min-h-0">
           {/* Fighter Selection */}
           {gameState === 'setup' && (
             <>
@@ -849,10 +854,10 @@ export default function QuickPlayPage() {
 
           {/* Game Canvas and Stats Editor Side by Side for Playing/Paused/Ended States */}
           {(gameState === 'playing' || gameState === 'paused' || gameState === 'ended') && (
-            <div className={`flex gap-4 min-h-0 flex-1 ${immersive && !showBattleSettings ? 'pb-10' : ''}`}>
+            <div className={`flex gap-4 min-h-0 flex-1  transition-all duration-300`}>
               {/* Game Canvas - Left Side (responsive size) */}
-              <div className={`flex-1 flex flex-col min-w-0 ${immersive ? (showBattleSettings ? '' : 'pb-10') : ''}`}>
-                <div className={`bg-white rounded-xl shadow-sm border flex flex-col mt-6 ml-4 ${showBattleSettings ? 'mb-10' : 'mb-16'} overflow-hidden max-h-dvh`}>
+              <div className={`flex-1 flex flex-col min-w-0 mb-6`}>
+                <div className="bg-white rounded-xl shadow-sm border flex flex-col mt-6 ml-6 h-full min-h-0 overflow-hidden transition-all duration-300"> 
                   <div className="py-2 px-3 border-b flex-shrink-0">
                     {/* Battle Header with Fighter Info */}
                     <div className="flex items-center justify-between mb-2">
@@ -987,7 +992,7 @@ export default function QuickPlayPage() {
                     </div>
           
                   </div>
-                  <div className={`flex-1 flex items-center justify-center relative ${immersive ? (showBattleSettings ? 'p-0' : 'pb-8') : 'p-4'} overflow-hidden`}>
+                  <div className={`flex-1 flex items-center justify-center relative ${immersive ? 'p-0' : 'p-4'} overflow-hidden transition-all duration-300`}>
                       <div className="w-full h-full box-border">
                       <GameCanvas
                         width={arenaSize.width}
