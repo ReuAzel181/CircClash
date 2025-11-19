@@ -356,7 +356,6 @@ export default function QuickPlayPage() {
     initializeGame()
     applyAllStatsToGame() // Apply stats before starting
     resumeGame() // Start the game immediately
-    setShowBattleSettings(false)
     setGameState('playing')
     setGameStats({ time: 0, eliminations: 0 })
     setGameStartTime(Date.now())
@@ -372,9 +371,8 @@ export default function QuickPlayPage() {
   const handleResumeGame = () => {
     applyAllStatsToGame() // Apply all current stat changes before resuming
     resumeGame()
-    setShowBattleSettings(false)
     setGameState('playing')
-  setPaused(false)
+    setPaused(false)
   }
 
   const handleRestart = () => {
@@ -851,10 +849,10 @@ export default function QuickPlayPage() {
 
           {/* Game Canvas and Stats Editor Side by Side for Playing/Paused/Ended States */}
           {(gameState === 'playing' || gameState === 'paused' || gameState === 'ended') && (
-            <div className="flex gap-4 min-h-0 flex-1">
+            <div className={`flex gap-4 min-h-0 flex-1 ${immersive && !showBattleSettings ? 'pb-10' : ''}`}>
               {/* Game Canvas - Left Side (responsive size) */}
-              <div className="flex-1 flex flex-col min-w-0">
-                <div className="bg-white rounded-xl shadow-sm border flex flex-col mb-8">
+              <div className={`flex-1 flex flex-col min-w-0 ${immersive ? (showBattleSettings ? '' : 'pb-10') : ''}`}>
+                <div className={`bg-white rounded-xl shadow-sm border flex flex-col mt-6 ml-4 ${showBattleSettings ? 'mb-10' : 'mb-16'} overflow-hidden max-h-dvh`}>
                   <div className="py-2 px-3 border-b flex-shrink-0">
                     {/* Battle Header with Fighter Info */}
                     <div className="flex items-center justify-between mb-2">
@@ -989,7 +987,7 @@ export default function QuickPlayPage() {
                     </div>
           
                   </div>
-                  <div className={`flex-1 flex items-center justify-center relative ${immersive ? 'p-0' : 'p-4'}`}>
+                  <div className={`flex-1 flex items-center justify-center relative ${immersive ? (showBattleSettings ? 'p-0' : 'pb-8') : 'p-4'} overflow-hidden`}>
                       <div className="w-full h-full box-border">
                       <GameCanvas
                         width={arenaSize.width}
@@ -1082,7 +1080,25 @@ export default function QuickPlayPage() {
               </div>
 
               {/* Toggle Button - Positioned between arena and settings */}
-              <div className="flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center gap-2">
+                {!showBattleSettings && (
+                  <>
+                    <button
+                      onClick={handlePauseGame}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
+                      title="Pause"
+                    >
+                      <Pause className="w-4 h-4 text-white" />
+                    </button>
+                    <button
+                      onClick={handleRestart}
+                      className="bg-green-500 hover:bg-green-600 text-white rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
+                      title="Restart"
+                    >
+                      <RotateCcw className="w-4 h-4 text-white" />
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setShowBattleSettings(!showBattleSettings)}
                   className="bg-white border border-gray-300 hover:border-gray-400 rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
@@ -1109,6 +1125,24 @@ export default function QuickPlayPage() {
                   <div className="bg-white rounded-lg shadow-sm border p-3 h-full flex flex-col">
                     {/* Quick Actions */}
                     <div className="flex gap-1 mb-3">
+                      {gameState === 'playing' && (
+                        <button
+                          onClick={handlePauseGame}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+                        >
+                          <Pause className="w-3 h-3" />
+                          Pause
+                        </button>
+                      )}
+                      {gameState === 'playing' && (
+                        <button
+                          onClick={handleRestart}
+                          className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Restart
+                        </button>
+                      )}
                       {gameState === 'paused' && (
                         <button
                           onClick={handleResumeGame}
@@ -1125,7 +1159,7 @@ export default function QuickPlayPage() {
                           className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
                         >
                           <RotateCcw className="w-3 h-3" />
-                          Reset
+                          Restart
                         </button>
                       )}
                     </div>
