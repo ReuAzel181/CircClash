@@ -11,7 +11,7 @@ const archerConfig = {
   name: 'Wind Archer',
   color: '#4ade80',
   bulletColor: '#4ade80',
-  damage: 35,
+  damage: 15,
   projectileSpeed: 450,
   bulletRadius: 3,
   firingRate: 600,
@@ -23,16 +23,18 @@ const archerConfig = {
   multiShot: 3,
   spreadAngle: 15,
   homingStrength: 0.2,
-  bulletStyle: 'piercing',
+  bulletStyle: 'wind',
   bulletShape: 'arrow',
   trailEffect: true,
   glowEffect: true,
   specialAbility: 'Wind Tunnel',
-  abilityDescription: 'Creates a wind tunnel that accelerates friendly projectiles and deflects enemy projectiles',
+  abilityDescription: 'Creates gusting wind corridors that redirect and accelerate projectiles',
   tunnelDuration: 3000,
   tunnelWidth: 40,
   tunnelLength: 300,
-  projectileSpeedBoost: 1.5,
+  projectileSpeedBoost: 2.0,
+  gustFrequency: 2.0,
+  gustStrength: 0.25,
   deflectionAngle: 45,
 };
 
@@ -102,15 +104,17 @@ class WindTunnelAbility extends BaseAbility {
     const entity = world.entities.get(entityId);
     if (!entity) return;
 
-    const tunnel = {
-      position: { x: entity.position.x, y: entity.position.y },
-      direction,
-      width: archerConfig.tunnelWidth,
-      length: archerConfig.tunnelLength,
-      duration: archerConfig.tunnelDuration,
-      speedBoost: archerConfig.projectileSpeedBoost,
-      deflectionAngle: archerConfig.deflectionAngle
-    };
+  const tunnel = {
+    position: { x: entity.position.x, y: entity.position.y },
+    direction,
+    width: archerConfig.tunnelWidth,
+    length: archerConfig.tunnelLength,
+    duration: archerConfig.tunnelDuration,
+    speedBoost: archerConfig.projectileSpeedBoost,
+    deflectionAngle: archerConfig.deflectionAngle,
+    gustFrequency: archerConfig.gustFrequency,
+    gustStrength: archerConfig.gustStrength
+  };
 
     const windTunnelEffect = {
       type: 'windTunnel',
@@ -164,14 +168,22 @@ const arrowBehavior: ProjectileBehavior = {
       }
     }
 
+    const v = projectile.velocity
+    const perp = { x: -v.y, y: v.x }
+    const perpNorm = Vector.normalize(perp)
+    const t = Date.now() * (archerConfig.gustFrequency || 2.0) * 0.001
+    const gust = Math.sin(t) * (archerConfig.gustStrength || 0.25)
+    const drift = Vector.multiply(perpNorm, projectile.speed * gust * deltaTime)
+    projectile.velocity = Vector.add(projectile.velocity, drift)
+
     const windTunnels = ((world as any).effects || []).filter((effect: any) => effect.type === 'windTunnel');
     for (const tunnel of windTunnels) {
       if (isInWindTunnel(projectile, tunnel)) {
         if (projectile.ownerId === tunnel.ownerId) {
-          projectile.velocity = Vector.multiply(
-            projectile.velocity,
-            tunnel.speedBoost
-          );
+          const t = (Date.now() - tunnel.createdAt) / 1000;
+          const gust = Math.sin(t * tunnel.gustFrequency) * tunnel.gustStrength;
+          const along = Vector.multiply(Vector.normalize(tunnel.direction), projectile.speed * (tunnel.speedBoost - 1 + gust) * deltaTime);
+          projectile.velocity = Vector.add(projectile.velocity, along);
         } else {
           deflectProjectile(projectile, tunnel);
         }
@@ -404,7 +416,7 @@ export class Archer extends BaseCharacter {
 
     const windTunnels = ((world as any).effects || []).filter((effect: any) => 
       effect.type === 'windTunnel' && 
-      effect.owner === entity.id
+      effect.ownerId === entity.id
     );
 
     for (const tunnel of windTunnels) {

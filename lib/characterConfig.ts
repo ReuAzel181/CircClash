@@ -41,7 +41,7 @@ export interface CharacterConfig extends BaseProjectileConfig {
     swingDuration?: number // Duration of weapon swing animation
     swingAngle?: number // Angle of weapon swing in degrees
   }
-  bulletStyle: 'normal' | 'spinning' | 'electric' | 'magical' | 'flame' | 'ice' | 'shadow' | 'heavy' | 'piercing' | 'slashing' | 'explosive' | 'boomerang' | 'barrier' | 'chain' | 'web' | 'mine' | 'clone' | 'shockwave' | 'tunnel' | 'rift' | 'earthquake' | 'fissure' | 'ironhand' | 'energywave' | 'vortex' | 'spear' | 'thunder' | 'dash'
+  bulletStyle: 'normal' | 'spinning' | 'electric' | 'magical' | 'flame' | 'ice' | 'shadow' | 'heavy' | 'piercing' | 'slashing' | 'explosive' | 'boomerang' | 'barrier' | 'chain' | 'web' | 'mine' | 'clone' | 'shockwave' | 'tunnel' | 'wind' | 'rift' | 'earthquake' | 'fissure' | 'ironhand' | 'energywave' | 'vortex' | 'spear' | 'thunder' | 'dash'
   bulletShape: 'circle' | 'star' | 'diamond' | 'triangle' | 'spark' | 'shard' | 'orb' | 'cannon' | 'arrow' | 'arc' | 'beam' | 'bomb' | 'disc' | 'wall' | 'thread' | 'ironhand' | 'sphere' | 'spear' | 'thunder' | 'charge' | 'dome'
   stunDuration?: number // ms, for stun abilities
   electricField?: boolean // true if creates electric field
@@ -137,7 +137,7 @@ export const CHARACTER_CONFIGS: Record<string, CharacterConfig> = {
     bulletRadius: 1.2, // Arrow-like projectile
     firingRate: 200,
     attackRange: 550,
-    bulletStyle: 'tunnel',
+    bulletStyle: 'wind',
     bulletShape: 'arrow',
     trailEffect: true,
     glowEffect: true,

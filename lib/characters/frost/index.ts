@@ -491,8 +491,8 @@ export class Frost extends BaseCharacter {
     super('frost');
     
     // Initialize abilities
-    this.primaryAttack = new IceShardAttack();
     this.specialAbility = new IceCharge();
+    this.primaryAttack = this.specialAbility;
     this.ai = new FrostAI();
     
     // Register projectile behavior
@@ -526,13 +526,10 @@ export class Frost extends BaseCharacter {
       owner.velocity.y = moveDirection.y * moveSpeed;
     }
     
-    // Attack
     if (distance <= frostConfig.attackRange && !owner.properties?.isCharging) {
-      if (this.ai.shouldUseSpecialAbility(owner, target)) {
-        this.ai.useSpecialAbility(owner, target, world);
-      } else if (!this.primaryAttack.isOnCooldown()) {
-        const attackDirection = this.ai.calculateAttackDirection(owner, target);
-        this.primaryAttack.execute(owner.id, attackDirection, world);
+      const attackDirection = this.ai.calculateAttackDirection(owner, target);
+      if (this.specialAbility && !this.specialAbility.isOnCooldown() && this.ai.shouldUseSpecialAbility(owner, target)) {
+        this.specialAbility.execute(owner.id, attackDirection, world);
       }
     }
   }

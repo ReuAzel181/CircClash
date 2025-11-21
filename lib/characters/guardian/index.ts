@@ -328,14 +328,11 @@ class GuardianAI extends BaseAI {
   }
 
   shouldUseSpecialAbility(owner: CircleEntity, target: CircleEntity): boolean {
-    const currentTime = Date.now();
-    if (currentTime - this.lastSpecialUse < this.specialCooldown) {
-      return false;
-    }
-
-    // Use barrier when health is low or multiple enemies nearby
-    const healthPercentage = owner.health / owner.maxHealth;
-    return healthPercentage < 0.5;
+    const distance = Math.sqrt(
+      (target.position.x - owner.position.x) ** 2 + 
+      (target.position.y - owner.position.y) ** 2
+    );
+    return distance <= guardianConfig.attackRange;
   }
 
   useSpecialAbility(owner: CircleEntity, target: CircleEntity, world: PhysicsWorld): void {
@@ -366,8 +363,8 @@ export class Guardian extends BaseCharacter {
     super('guardian');
     
     // Initialize abilities
-    this.primaryAttack = new EnergyWaveAttack();
-    this.specialAbility = new BarrierShield();
+    this.specialAbility = new EnergyWaveAttack();
+    this.primaryAttack = this.specialAbility;
     this.ai = new GuardianAI();
     
     // Register projectile behavior
@@ -413,13 +410,10 @@ export class Guardian extends BaseCharacter {
       owner.velocity.y = moveDirection.y * moveSpeed;
     }
     
-    // Attack
     if (distance <= guardianConfig.attackRange) {
-      if (this.ai.shouldUseSpecialAbility(owner, target)) {
-      this.ai.useSpecialAbility(owner, target, world);
-    } else if (!this.primaryAttack.isOnCooldown()) {
-        const attackDirection = this.ai.calculateAttackDirection(owner, target);
-        this.primaryAttack.execute(owner.id, attackDirection, world);
+      const attackDirection = this.ai.calculateAttackDirection(owner, target);
+      if (this.specialAbility && !this.specialAbility.isOnCooldown() && this.ai.shouldUseSpecialAbility(owner, target)) {
+        this.specialAbility.execute(owner.id, attackDirection, world);
       }
     }
   }

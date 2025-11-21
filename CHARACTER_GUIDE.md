@@ -59,6 +59,8 @@
 **Bullet Style:** Expanding energy wave with enhanced radius and continuous damage  
 **Tactical Role:** Ultimate defensive tank with extended area denial and crowd control
 
+**Attack Behavior:** All basic attacks now execute Energy Wave Surge; primary attack is unified to the special ability.
+
 ### Energy Wave Mechanics
 - **1-second charge period** where Guardian becomes stationary and glows with energy (reduced from 1.5s)
 - **Enhanced growing wave** that expands rapidly as it travels (1.8x growth rate)
@@ -183,6 +185,8 @@
 **Bullet Style:** Explosive fire projectiles with area of effect damage  
 **Tactical Role:** Area denial specialist with moderate firing rate
 
+**Attack Behavior:** All basic attacks now execute Flame Burst; primary attack is unified to the special ability.
+
 ### Strengths
 - Dual projectile coverage with area damage
 - Fire trails create zone control and area denial
@@ -223,10 +227,7 @@
 **Bullet Style:** Automatic ice barrier formation with collision and defensive properties  
 **Tactical Role:** Mobile defensive tank with unique positioning advantage
 
-### Primary Attack: Glacial Blade
-**Description:** Wields a frost-imbued sword for close-range combat, performing melee swings in an arc that slow enemies briefly and deal moderate damage.  
-**Attack Style:** Short-range melee arc with slowing ice effects  
-**Combat Role:** Close-quarters duelist with crowd control potential
+**Attack Behavior:** All basic attacks now execute the character’s special ability; primary attack is unified to the special ability.
 
 ### Strengths
 - Automatic barrier generation provides consistent defense
@@ -379,6 +380,8 @@
 **Bullet Style:** Electrified energy slashes with chain lightning effects  
 **Tactical Role:** Close-quarters specialist with electrical chain damage
 
+**Attack Behavior:** All basic attacks now execute Lightning Edge; primary attack is unified to the special ability.
+
 ### Strengths
 - Electrical chains can damage multiple enemies simultaneously
 - Highest attack damage for maximum burst potential
@@ -450,6 +453,8 @@
 **Description:** Deploys proximity mines that detonate when enemies approach  
 **Bullet Style:** Deployable mine projectiles with proximity sensors  
 **Tactical Role:** Battlefield engineer specializing in area denial and trap warfare
+
+**Attack Behavior:** All basic attacks now deploy Mine Field; primary attack is unified to the special ability.
 
 ### Strengths
 - Mine fields provide excellent area denial

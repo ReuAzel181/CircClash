@@ -831,17 +831,7 @@ export function integrate(entity: CircleEntity, dt: number): void {
   // Apply gravity (only to projectiles for realistic ballistics)
   if (entity.type === 'projectile') {
     // Apply gravity for realistic trajectory
-    entity.acceleration = Vector.add(entity.acceleration, Vector.create(0, 98)) // 9.8 m/s² scaled
-    
-    // Apply air resistance based on velocity
-    const velocityMagnitude = Vector.magnitude(entity.velocity)
-    if (velocityMagnitude > 0) {
-      const airResistance = Vector.multiply(
-        Vector.normalize(entity.velocity),
-        -0.02 * velocityMagnitude * velocityMagnitude // Quadratic air resistance
-      )
-      entity.acceleration = Vector.add(entity.acceleration, airResistance)
-    }
+    // entity.acceleration = Vector.add(entity.acceleration, Vector.create(0, 98)) // 9.8 m/s² scaled
   }
   
   // Apply acceleration to velocity
@@ -864,7 +854,7 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
   const { playBounceSound } = require('./audio')
   
   // Left boundary
-  if (entity.position.x - entity.radius < 0) {
+  if (entity.position.x - entity.radius <= 0) {
     entity.position.x = entity.radius
     entity.velocity.x = -entity.velocity.x * bounceFactor
     // Small random component for variety but maintain overall speed
@@ -874,7 +864,7 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
   }
   
   // Right boundary
-  if (entity.position.x + entity.radius > bounds.width) {
+  if (entity.position.x + entity.radius >= bounds.width) {
     entity.position.x = bounds.width - entity.radius
     entity.velocity.x = -entity.velocity.x * bounceFactor
     // Small random component for variety but maintain overall speed
@@ -884,7 +874,7 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
   }
   
   // Top boundary
-  if (entity.position.y - entity.radius < 0) {
+  if (entity.position.y - entity.radius <= 0) {
     entity.position.y = entity.radius
     entity.velocity.y = -entity.velocity.y * bounceFactor
     // Small random component for variety but maintain overall speed
@@ -894,7 +884,7 @@ export function handleBoundaryCollision(entity: CircleEntity, bounds: { width: n
   }
   
   // Bottom boundary
-  if (entity.position.y + entity.radius > bounds.height) {
+  if (entity.position.y + entity.radius >= bounds.height) {
     entity.position.y = bounds.height - entity.radius
     entity.velocity.y = -entity.velocity.y * bounceFactor
     // Small random component for variety but maintain overall speed
@@ -1740,12 +1730,15 @@ export async function simulateStep(world: PhysicsWorld, deltaTime: number): Prom
         // Normal physics for non-projectiles with speed adjustment
         const originalVelocity = { ...entity.velocity }
         integrate(entity, world.fixedTimeStep)
+        handleBoundaryCollision(entity, world.bounds)
+        entity.position.x = Math.max(entity.radius, Math.min(world.bounds.width - entity.radius, entity.position.x))
+        entity.position.y = Math.max(entity.radius, Math.min(world.bounds.height - entity.radius, entity.position.y))
         
         if (speedMultiplier < 1.0) {
           entity.velocity = Vector.multiply(entity.velocity, speedMultiplier)
         }
         
-        handleBoundaryCollision(entity, world.bounds)
+        
       }
     }
     

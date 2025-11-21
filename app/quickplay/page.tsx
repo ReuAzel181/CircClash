@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Home, RotateCcw, Play, Pause, Shuffle, Users, Settings, ChevronRight } from 'lucide-react'
+import { Home, RotateCcw, Play, Pause, Shuffle, Users, Settings } from 'lucide-react'
 import GameCanvas from '../../components/GameCanvas'
 import { 
   startGame, 
@@ -189,7 +189,7 @@ export default function QuickPlayPage() {
   const [editingStats, setEditingStats] = useState<typeof characters>([])
   const [globalHealthMultiplier, setGlobalHealthMultiplier] = useState(1)
   const [arenaTheme, setArenaTheme] = useState<'dark' | 'light' | 'sunset' | 'ocean' | 'forest'>('dark')
-  const [showBattleSettings, setShowBattleSettings] = useState(true)
+  
   const [paused, setPaused] = useState(false)
   const immersive = gameState === 'playing' || gameState === 'paused'
   
@@ -202,15 +202,14 @@ export default function QuickPlayPage() {
       const headerHeight = immersive ? 0 : 140
       const footerHeight = immersive ? 0 : 80
       const padding = immersive ? 0 : 24
-      const sidebarWidth = immersive ? 0 : (showBattleSettings ? 224 : 0)
+      const sidebarWidth = immersive ? 0 : 224
       
       // Calculate available space
       const availableWidth = Math.max(400, viewportWidth - sidebarWidth - padding * 2)
       const availableHeight = Math.max(240, viewportHeight - headerHeight - footerHeight - padding * 2)
       
-      // Use more conservative max heights so arena always fits and has breathing room
-      const width = immersive ? viewportWidth : Math.min(availableWidth, showBattleSettings ? 800 : 1200)
-      const height = Math.min(availableHeight, 470)
+      const width = immersive ? viewportWidth : availableWidth
+      const height = availableHeight
       
       setArenaSize({ width, height })
     }
@@ -218,7 +217,7 @@ export default function QuickPlayPage() {
     updateArenaSize()
     window.addEventListener('resize', updateArenaSize)
     return () => window.removeEventListener('resize', updateArenaSize)
-  }, [showBattleSettings, immersive])
+  }, [immersive])
   
   // Handle arena resize during active games - reposition characters adaptively
   useEffect(() => {
@@ -377,11 +376,14 @@ export default function QuickPlayPage() {
 
   const handleRestart = () => {
     stopGame()
-    setGameState('setup')
+    initializeGame()
+    applyAllStatsToGame()
+    resumeGame()
+    setGameState('playing')
+    setPaused(false)
     setWinner(null)
     setBattleResult(null)
     setGameStats({ time: 0, eliminations: 0 })
-    setGlobalHealthMultiplier(1)
   }
 
   const randomizeFighters = () => {
@@ -1084,50 +1086,17 @@ export default function QuickPlayPage() {
                 </div>
               </div>
 
-              {/* Toggle Button - Positioned between arena and settings */}
-              <div className="flex flex-col items-center justify-center gap-2">
-                {!showBattleSettings && (
-                  <>
-                    <button
-                      onClick={handlePauseGame}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
-                      title="Pause"
-                    >
-                      <Pause className="w-4 h-4 text-white" />
-                    </button>
-                    <button
-                      onClick={handleRestart}
-                      className="bg-green-500 hover:bg-green-600 text-white rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
-                      title="Restart"
-                    >
-                      <RotateCcw className="w-4 h-4 text-white" />
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => setShowBattleSettings(!showBattleSettings)}
-                  className="bg-white border border-gray-300 hover:border-gray-400 rounded-lg p-2 shadow-sm transition-all duration-300 hover:shadow-md"
-                  title={showBattleSettings ? 'Hide Settings' : 'Show Settings'}
-                >
-                  <motion.div
-                    animate={{ rotate: showBattleSettings ? 0 : 180 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <ChevronRight className="w-4 h-4 text-gray-600" />
-                  </motion.div>
-                </button>
-              </div>
+              
 
               {/* Stats Editor - Right Side (fixed width) - minimalist */}
-              {showBattleSettings && (
-                <motion.div 
-                  className="w-56 flex-shrink-0"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="bg-white rounded-lg shadow-sm border p-3 h-full flex flex-col">
+              <motion.div 
+                className="w-56 flex-shrink-0"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="bg-white rounded-lg shadow-sm border p-3 h-full flex flex-col">
                     {/* Quick Actions */}
                     <div className="flex gap-1 mb-3">
                       {gameState === 'playing' && (
@@ -1154,10 +1123,9 @@ export default function QuickPlayPage() {
                           className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
                         >
                           <Play className="w-3 h-3" />
-                          Start
+                          Resume
                         </button>
                       )}
-                      
                       {(gameState === 'ended' || gameState === 'paused') && (
                         <button
                           onClick={handleRestart}
@@ -1310,9 +1278,8 @@ export default function QuickPlayPage() {
                         ))}
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              )}
+                </div>
+              </motion.div>
             </div>
           )}
 

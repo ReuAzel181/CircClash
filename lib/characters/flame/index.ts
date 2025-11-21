@@ -462,8 +462,8 @@ export class Flame extends BaseCharacter {
   constructor() {
     super('flame');
     this.ai = new FlameAI();
-    this.primaryAttack = new FlameBurstAttack();
-    this.specialAbility = new InfernoBurst();
+    this.specialAbility = new FlameBurstAttack();
+    this.primaryAttack = this.specialAbility;
     
     // Set up projectile behaviors
     this.projectileBehaviors = {
@@ -496,13 +496,10 @@ export class Flame extends BaseCharacter {
       owner.velocity.y = moveDirection.y * moveSpeed;
     }
     
-    // Attack
     if (distance <= flameConfig.attackRange) {
-      if (this.ai.shouldUseSpecialAbility(owner, target)) {
-        this.ai.useSpecialAbility(owner, target, world);
-      } else if (!(this.primaryAttack as any).isOnCooldown()) {
-        const attackDirection = this.ai.calculateAttackDirection(owner, target);
-        this.primaryAttack.execute(owner.id, attackDirection, world);
+      const attackDirection = this.ai.calculateAttackDirection(owner, target);
+      if (this.specialAbility && !(this.specialAbility as BaseAbility).isOnCooldown() && this.ai.shouldUseSpecialAbility(owner, target)) {
+        this.specialAbility.execute(owner.id, attackDirection, world);
       }
     }
   }

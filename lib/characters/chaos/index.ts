@@ -309,7 +309,8 @@ export default class Chaos extends BaseCharacter {
 
   constructor() {
     super('chaos');
-    this.primaryAttack = new MineFieldAttack();
+    this.specialAbility = new MineFieldAttack();
+    this.primaryAttack = this.specialAbility;
     this.ai = new ChaosAI();
     
     // Set up projectile behaviors

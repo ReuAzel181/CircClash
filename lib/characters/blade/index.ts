@@ -2,7 +2,7 @@ import { BaseCharacter, BaseAbility, BaseAI } from '../baseCharacter';
 import { getCharacterConfigSync, CharacterConfig } from '../../characterConfig';
 import { Vector, CircleEntity, PhysicsWorld, createProjectile } from '../../physics';
 import { CharacterAbility, ProjectileBehavior } from '../characterInterface';
-import { EntityUtils } from '../characterUtils';
+import { EntityUtils, stunTarget } from '../characterUtils';
 import { ProjectileEntity } from '../projectileInterface';
 
 // Blade Master character configuration
@@ -66,8 +66,8 @@ export class LightningEdgeAttack extends BaseAbility {
     // Add chain lightning behavior
     projectile.chainLightning = true;
     projectile.chainCount = 0;
-    projectile.maxChains = 3;
-    projectile.chainRange = bladeConfig.explosiveRadius || 25;
+    projectile.maxChains = 4;
+    projectile.chainRange = 120;
     projectile.chainedTargets = new Set();
     projectile.createdAt = Date.now();
     projectile.damage = bladeConfig.damage;
@@ -127,7 +127,7 @@ function chainLightningToNearbyEnemies(projectile: ProjectileEntity & {
   chainRange?: number;
   chainedTargets?: Set<string>;
 }, hitEnemy: CircleEntity, world: PhysicsWorld): void {
-  const chainRange = projectile.chainRange || 25;
+  const chainRange = projectile.chainRange || 120;
   let nearestEnemy: CircleEntity | null = null;
   let nearestDistance = Infinity;
 
@@ -156,6 +156,9 @@ function chainLightningToNearbyEnemies(projectile: ProjectileEntity & {
     if (enemyWithHealth.health !== undefined) {
       enemyWithHealth.health -= (projectile.damage || bladeConfig.damage) * 0.7;
     }
+
+    // Apply brief electric stun for chain hit
+    stunTarget(enemyWithHealth.id, 500, world);
 
     // Mark as chained
     if (!projectile.chainedTargets) {
@@ -249,14 +252,13 @@ export class BladeAI extends BaseAI {
 
 // Main Blade Master character class
 export default class Blade extends BaseCharacter {
-  private lightningEdge: LightningEdgeAttack;
   private ai: BladeAI;
 
   constructor() {
     super('blade');
-    this.lightningEdge = new LightningEdgeAttack();
     this.ai = new BladeAI();
-    this.primaryAttack = this.lightningEdge;
+    this.specialAbility = new LightningEdgeAttack();
+    this.primaryAttack = this.specialAbility;
     this.projectileBehaviors = {
       blade: {
         onUpdate: bladeProjectileBehavior

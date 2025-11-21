@@ -7,6 +7,7 @@ import {
   movePlayer, 
   fireProjectile, 
   updateBotAI,
+  setArenaSize,
   GameState
 } from '../lib/game'
 import { CircleEntity, Vector } from '../lib/physics'
@@ -163,8 +164,10 @@ export default function GameCanvas({
       return
     }
     
-    // Get theme colors
     const themeColors = getThemeColors(theme)
+    if (game.config.arenaWidth !== canvas.width || game.config.arenaHeight !== canvas.height) {
+      setArenaSize(canvas.width, canvas.height)
+    }
     
     // Clear canvas with themed arena background
     ctx.fillStyle = themeColors.background
@@ -177,6 +180,12 @@ export default function GameCanvas({
     
     // Draw entities in proper order: projectiles first (background), then players (foreground)
     const entities = getGameEntities()
+    entities.forEach(e => {
+      if (e.type !== 'projectile') {
+        e.position.x = Math.max(e.radius, Math.min(canvas.width - e.radius, e.position.x))
+        e.position.y = Math.max(e.radius, Math.min(canvas.height - e.radius, e.position.y))
+      }
+    })
     
     // First pass: Draw all projectiles (including ice walls) in the background
     entities.forEach(entity => {
@@ -214,14 +223,16 @@ export default function GameCanvas({
     }
   }, [render])
 
-  // Ensure canvas fills its container by syncing to container size
+  // Ensure canvas fills its container fully
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const update = () => {
       const w = el.clientWidth
       const h = el.clientHeight
-      if (w > 0 && h > 0) setCanvasSize({ width: w, height: h })
+      if (w > 0 && h > 0) {
+        setCanvasSize({ width: w, height: h })
+      }
     }
     update()
     const ro = new ResizeObserver(update)
@@ -230,6 +241,13 @@ export default function GameCanvas({
       ro.disconnect()
     }
   }, [])
+
+  useEffect(() => {
+    try {
+      const { setArenaSize } = require('../lib/game')
+      setArenaSize(canvasSize.width, canvasSize.height)
+    } catch {}
+  }, [canvasSize.width, canvasSize.height])
 
   return (
     <div 
@@ -242,6 +260,7 @@ export default function GameCanvas({
         overflow-hidden 
         w-full 
         h-full 
+        flex items-center justify-center
         ${className}
       `}
     >
@@ -251,8 +270,8 @@ export default function GameCanvas({
         width={canvasSize.width}
         height={canvasSize.height}
         style={{
-          width: "100%",
-          height: "100%",
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
           imageRendering: "pixelated",
           display: "block"
         }}
@@ -297,10 +316,12 @@ function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, 
 }
 
 function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: number, theme: 'dark' | 'light' | 'sunset' | 'ocean' | 'forest' = 'dark'): void {
-  const x = entity.position.x * scale
-  const y = entity.position.y * scale
+  let x = entity.position.x * scale
+  let y = entity.position.y * scale
   // Drawn radius uses a visual scale to make arena feel larger without changing physics
   const radius = entity.radius * scale * CHARACTER_SCALE
+  x = Math.max(radius, Math.min((ctx.canvas.width || 0) - radius, x))
+  y = Math.max(radius, Math.min((ctx.canvas.height || 0) - radius, y))
   
   // Get theme colors for consistent styling
   const themeColors = getThemeColors(theme)
@@ -357,7 +378,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
       ctx.arc(x, y, radius, 0, 2 * Math.PI)
       
       // Color based on character type for autonomous entities
-      const healthPercent = entity.health / entity.maxHealth
+      const healthPercent = Math.max(0, Math.min(1, entity.maxHealth > 0 ? (entity.health / entity.maxHealth) : 1))
       
       // Character-specific colors for all entities (autonomous gameplay)
       const characterType = getCharacterType(entity.id)
@@ -1952,7 +1973,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: CircleEntity, scale: 
           ctx.strokeStyle = '#1f2937'
           ctx.lineWidth = Math.max(2, radius * 0.7)
           ctx.globalAlpha = 0.5
-        } else if (projectileCharacterType === 'archer' && projectileConfig.bulletStyle === 'piercing') {
+        } else if (projectileCharacterType === 'archer' && (projectileConfig.bulletStyle === 'piercing' || projectileConfig.bulletStyle === 'wind' || projectileConfig.bulletStyle === 'tunnel')) {
           // Wind trail
           ctx.strokeStyle = '#10b981'
           ctx.lineWidth = Math.max(2, radius * 0.5)

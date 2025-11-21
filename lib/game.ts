@@ -558,6 +558,13 @@ export function fireProjectile(
         ;(projectile as any).windTunnel = true
         ;(projectile as any).redirectStrength = 0.2
         break
+      case 'wind':
+        ;(projectile as any).windTunnel = true
+        ;(projectile as any).redirectStrength = 0.25
+        ;(projectile as any).gustBoost = 1.2
+        ;(projectile as any).gustFrequency = 2.0
+        ;(projectile as any).gustStrength = 0.2
+        break
         
       case 'flame':
         ;(projectile as any).explosive = true
